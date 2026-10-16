@@ -134,3 +134,7 @@ All from Wikimedia Commons, used under their licences:
 
 The files themselves are not in the repository (`samples/` is ignored); [eval/samples.json](eval/samples.json) lists
 where each came from.
+
+## Licence
+
+The code is released under the [MIT licence](LICENSE). The sample videos keep their own licences (above).

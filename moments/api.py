@@ -22,7 +22,8 @@ from pydantic import BaseModel
 from .answer import AnswerError, answer
 from .library import Library, LibraryError
 
-load_dotenv()
+PROJECT = Path(__file__).resolve().parents[1]
+load_dotenv(PROJECT / ".env")
 
 WEB = Path(__file__).parent / "web"
 MAX_UPLOAD_BYTES = 2 * 1024**3  # 2 GB
@@ -66,7 +67,9 @@ class Jobs:
                 if self.pool is None:
                     from polysub.asr import EnginePool
 
-                    self.pool = EnginePool()
+                    from .transcribe import FACTORIES
+
+                    self.pool = EnginePool(factories=FACTORIES)
                 video_id = self.library.ingest(path, pool=self.pool, language=language, title=title,
                                                progress=lambda f: self._update(job_id, progress=round(f, 3)))
                 self._update(job_id, status="done", progress=1.0, video_id=video_id)
@@ -82,7 +85,7 @@ class Question(BaseModel):
 
 
 def create_app(library=None, jobs=None, llm=None):
-    library = library or Library(os.environ.get("MOMENTS_DATA", "data"))
+    library = library or Library(os.environ.get("MOMENTS_DATA", PROJECT / "data"))
     jobs = jobs or Jobs(library)
     app = FastAPI(title="Moments")
     uploads = library.root / "uploads"

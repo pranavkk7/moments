@@ -86,6 +86,8 @@ def test_helpful_errors(library, media):
 def test_tokens_split_words_or_character_pairs():
     assert tokens("When is the EXAM?", "en") == ["when", "is", "the", "exam"]
     assert tokens("試験は来週", "ja") == ["試験", "験は", "は来", "来週"]
+    assert tokens("ആശുപത്രിയിൽ", "ml")[:2] == ["ആശു", "ശുപ"]  # Malayalam: 3-letter pieces of each word
+    assert tokens("ok", "ml") == ["ok"]
 
 
 def test_search_modes_use_one_ranking_or_both(library, media):

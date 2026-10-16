@@ -33,6 +33,9 @@ CANDIDATES = 30  # how many windows each method contributes before fusion
 # words of an English question against a Japanese transcript is mostly noise, and on the test set it
 # pulled the right moment down (see the README); only meaning connects the two languages.
 CROSS_SCRIPT_KEYWORD_WEIGHT = 0.0
+# Languages whose keyword search matches 3-letter pieces of words instead of whole words. Only Malayalam
+# is measured; Tamil, Telugu and Kannada join words the same way and would likely gain too.
+PIECE_LANGUAGES = {"ml"}
 
 
 class LibraryError(Exception):
@@ -73,12 +76,18 @@ def script_of(text):
 
 
 def tokens(text, language):
-    """Words for keyword search. Languages written without spaces are split into character pairs."""
+    """Terms for keyword search. Languages written without spaces are split into character pairs.
+    Malayalam glues words together (ആശുപത്രിയിൽ = "hospital" + "in"), so whole words from an imperfect
+    transcript rarely match a question's words; its words are split into overlapping 3-letter pieces,
+    which lifted keyword search on the Malayalam questions from 0% to 100% first place (README)."""
     text = text.lower()
     if not languages.uses_spaces(language):
         chars = [c for c in text if not c.isspace() and c.isalnum()]
         return [a + b for a, b in zip(chars, chars[1:])] or chars
-    return [t for t in re.split(r"[\s.,!?;:\"'()\[\]{}…\-–—/]+", text) if t]
+    words = [t for t in re.split(r"[\s.,!?;:\"'()\[\]{}…\-–—/]+", text) if t]
+    if language in PIECE_LANGUAGES:
+        return [w[i:i + 3] for w in words for i in range(max(1, len(w) - 2))]
+    return words
 
 
 class Library:
@@ -133,13 +142,14 @@ class Library:
 
     # ---------- adding videos ----------
 
-    def ingest(self, path, pool=None, language=None, title=None, progress=None):
-        """Transcribes a file and adds it. Returns the video id."""
+    def ingest(self, path, pool=None, language=None, title=None, progress=None, engine_name=None):
+        """Transcribes a file and adds it. Returns the video id. `engine_name` overrides the engine
+        chosen for the language (used to compare engines)."""
         path = Path(path)
         if not path.exists():
             raise LibraryError(f"File not found: {path}")
         try:
-            transcript = transcribe(path, pool=pool, language=language, progress=progress)
+            transcript = transcribe(path, pool=pool, language=language, progress=progress, engine_name=engine_name)
         except (ValueError, AudioError) as error:  # an unknown language, or a file FFmpeg cannot read
             raise LibraryError(str(error)) from error
         return self.add(path, transcript, title=title)
@@ -154,6 +164,7 @@ class Library:
         folder.mkdir(parents=True, exist_ok=True)
         meta = {"id": video_id, "title": title or path.stem, "source": str(path.resolve()),
                 "language": transcript.language, "engine": transcript.engine,
+                "script_repaired": transcript.script_repaired,
                 "duration": round(transcript.duration, 2), "segments": len(segments)}
         words = [{"text": w.text, "start": w.start, "end": w.end} for w in transcript.words]
         (folder / "transcript.json").write_text(json.dumps(words, ensure_ascii=False), "utf-8")

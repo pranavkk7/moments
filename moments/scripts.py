@@ -1,14 +1,14 @@
 """Repairing transcripts that Whisper wrote in the wrong Indian script.
 
-Whisper sometimes writes a language in the alphabet of a neighbouring one: on our Malayalam sample,
-large-v3 wrote Malayalam speech in Gurmukhi (Punjabi script) and large-v2 wrote it in Kannada. The sounds
+Whisper sometimes writes a language in the alphabet of a neighbouring one: on a Malayalam recording we
+tried, large-v3 wrote the speech in Gurmukhi (Punjabi script) and large-v2 wrote it in Kannada. The sounds
 are right; only the letters are wrong. The major Indian scripts share one layout in Unicode (inherited
 from the ISCII standard): the same consonant or vowel sign sits at the same offset in each script's
 block. So moving each letter to the same offset in the right block recovers readable text in the right
 script, e.g. Kannada ನಾಲ -> Malayalam നാല ("four").
 
 The repair is approximate where one script lacks a letter the other has, but it turns text that neither
-search nor a reader can use into text that both can (measured in the README).
+search nor a reader can use into text that both can.
 """
 import unicodedata
 

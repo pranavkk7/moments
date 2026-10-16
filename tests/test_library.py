@@ -86,8 +86,6 @@ def test_helpful_errors(library, media):
 def test_tokens_split_words_or_character_pairs():
     assert tokens("When is the EXAM?", "en") == ["when", "is", "the", "exam"]
     assert tokens("試験は来週", "ja") == ["試験", "験は", "は来", "来週"]
-    assert tokens("ആശുപത്രിയിൽ", "ml")[:2] == ["ആശു", "ശുപ"]  # Malayalam: 3-letter pieces of each word
-    assert tokens("ok", "ml") == ["ok"]
 
 
 def test_search_modes_use_one_ranking_or_both(library, media):
@@ -164,3 +162,15 @@ def test_ingest_translates_videos_in_other_languages(library, media, monkeypatch
     stages.clear()
     library.ingest(media("en.mp4", b"e"), on_stage=stages.append)
     assert stages == ["transcribing"]  # nothing to translate
+
+
+def test_a_video_can_be_removed(library, media):
+    path = media("a.mp4", b"a")
+    a = library.add(path, transcript(["the exam is in march"] * 10))
+    b = library.add(media("b.mp4", b"b"), transcript(["the exam is in april"] * 10))
+    library.remove(a)
+    assert [v["id"] for v in library.videos()] == [b]
+    assert {h.video_id for h in library.search("exam", k=10)} == {b}
+    assert path.exists()  # the original file is not touched
+    with pytest.raises(LibraryError):
+        library.remove(a)

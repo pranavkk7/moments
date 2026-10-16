@@ -1,7 +1,7 @@
 """The video library: transcripts and windows on disk, vectors in ChromaDB, and hybrid search over both.
 
 Search combines two rankings, because each misses what the other finds:
-- meaning (dense vectors): finds a Malayalam moment for an English question, and paraphrases;
+- meaning (dense vectors): finds a Hindi moment for an English question, and paraphrases;
 - keywords (BM25 on the transcript): finds exact names, numbers and rare terms that vectors blur.
 The two lists are merged with reciprocal rank fusion, which needs no tuning of score scales: a window
 ranked high by either method rises, and one ranked high by both rises most. Keyword matches only count
@@ -16,6 +16,7 @@ Layout under the data folder:
 import hashlib
 import json
 import re
+import shutil
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,9 +34,6 @@ CANDIDATES = 30  # how many windows each method contributes before fusion
 # words of an English question against a Japanese transcript is mostly noise, and on the test set it
 # pulled the right moment down (see the README); only meaning connects the two languages.
 CROSS_SCRIPT_KEYWORD_WEIGHT = 0.0
-# Languages whose keyword search matches 3-letter pieces of words instead of whole words. Only Malayalam
-# is measured; Tamil, Telugu and Kannada join words the same way and would likely gain too.
-PIECE_LANGUAGES = {"ml"}
 # The rankings search can fuse: meaning and keywords in the video's own language, and the same two over
 # the English translation of videos in other languages.
 RANKINGS = ("meaning", "keyword", "meaning_en", "keyword_en")
@@ -81,18 +79,12 @@ def script_of(text):
 
 
 def tokens(text, language):
-    """Terms for keyword search. Languages written without spaces are split into character pairs.
-    Malayalam glues words together (ആശുപത്രിയിൽ = "hospital" + "in"), so whole words from an imperfect
-    transcript rarely match a question's words; its words are split into overlapping 3-letter pieces,
-    which lifted keyword search on the Malayalam questions from 0% to 100% first place (README)."""
+    """Terms for keyword search. Languages written without spaces are split into character pairs."""
     text = text.lower()
     if not languages.uses_spaces(language):
         chars = [c for c in text if not c.isspace() and c.isalnum()]
         return [a + b for a, b in zip(chars, chars[1:])] or chars
-    words = [t for t in re.split(r"[\s.,!?;:\"'()\[\]{}…\-–—/]+", text) if t]
-    if language in PIECE_LANGUAGES:
-        return [w[i:i + 3] for w in words for i in range(max(1, len(w) - 2))]
-    return words
+    return [t for t in re.split(r"[\s.,!?;:\"'()\[\]{}…\-–—/]+", text) if t]
 
 
 class Library:
@@ -183,6 +175,14 @@ class Library:
                 on_stage("translating")
             self.translate(video_id, pool=pool, progress=progress)
         return video_id
+
+    def remove(self, video_id):
+        """Takes a video out of the library: its vectors and its folder. The original file is untouched."""
+        self.meta(video_id)  # raises if there is no such video
+        self.collection.delete(where={"video_id": video_id})
+        self.english.delete(where={"video_id": video_id})
+        shutil.rmtree(self._dir(video_id))
+        self._scripts.pop(video_id, None)
 
     def translate(self, video_id, pool=None, progress=None):
         """Adds an English translation to every window of a video in another language, and indexes it.

@@ -1,7 +1,7 @@
 """Text to vectors that sit close together when they mean the same thing, in any language.
 
-Multilingual embedding models map "When does the course start?" and its Malayalam translation to nearby
-vectors, which is what lets an English question find a Malayalam moment without translating first.
+Multilingual embedding models map "When does the course start?" and its Hindi translation to nearby
+vectors, which is what lets an English question find a Hindi moment without translating first.
 Which model does this best on our videos is measured, not assumed (see moments.evaluate), so the model
 is a setting.
 

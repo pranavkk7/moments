@@ -20,7 +20,7 @@ def parse_args(argv=None):
 
     add = commands.add_parser("add", help="transcribe a video or audio file and add it to the library")
     add.add_argument("file")
-    add.add_argument("--language", help="spoken language, e.g. ml or Malayalam (default: detect)")
+    add.add_argument("--language", help="spoken language, e.g. hi or Hindi (default: detect)")
     add.add_argument("--title")
 
     commands.add_parser("list", help="list the videos in the library")

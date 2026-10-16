@@ -1,1 +1,10 @@
+# What the tests need (no GPU or models); see requirements.txt for a full install.
 pytest
+httpx
+numpy
+chromadb>=1.5
+rank-bm25
+fastapi
+python-multipart
+python-dotenv
+anthropic

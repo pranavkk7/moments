@@ -18,8 +18,9 @@ question ──► hybrid search (meaning + keywords, language-aware) ──► 
 ```
 
 1. **Transcribe.** Speech recognition comes from [PolySub](https://github.com/pranavkk7/polysub), which
-   already picks the more accurate engine per language by measurement (Qwen3-ASR or Whisper large-v3).
-   Every word keeps its start and end time.
+   already picks the more accurate engine per language by measurement (Qwen3-ASR or Whisper large-v3);
+   Malayalam uses Whisper large-v2 (measured below). Every word keeps its start and end time, and a fixed
+   random seed makes the same file always give the same transcript.
 2. **Repair the script.** Whisper sometimes writes an Indian language in a neighbouring alphabet
    (Malayalam came out in Gurmukhi). Indian scripts share one Unicode layout, so each letter is moved to
    the same place in the right script's block ([moments/scripts.py](moments/scripts.py)).
@@ -34,17 +35,18 @@ question ──► hybrid search (meaning + keywords, language-aware) ──► 
 
 ## Results
 
-52 questions over 4 videos, each with the time range where the answer is spoken, read from the timed
-transcripts ([eval/questions.json](eval/questions.json)). A result counts when its window overlaps the
-answer by at least 3 seconds. `python -m moments.evaluate` reproduces the table.
+65 questions over 5 videos in 5 languages, each with the time range where the answer is spoken, read
+from the timed transcripts ([eval/questions.json](eval/questions.json)). A result counts when its window
+overlaps the answer by at least 3 seconds. `python -m moments.evaluate` reproduces the tables.
 
 | Search | Right moment first | In the top 3 | MRR |
 |---|---|---|---|
-| **Moments (hybrid, language-aware)** | **81%** | **98%** | **0.90** |
-| Meaning only (bge-m3) | 75% | 98% | 0.87 |
-| Keywords only (BM25) | 44% | 54% | 0.50 |
+| **Moments (hybrid, language-aware)** | **72%** | **89%** | **0.81** |
+| Meaning only (bge-m3) | 68% | 88% | 0.78 |
+| Keywords only (BM25) | 40% | 48% | 0.45 |
 
-By group (hybrid):
+Without the Malayalam audiobook (see below), Moments puts the right moment first for 81% of the 52
+questions and in the top 3 for 98%. By group (hybrid):
 
 | Video | Questions in | n | First | Top 3 |
 |---|---|---|---|---|
@@ -55,6 +57,8 @@ By group (hybrid):
 | Hindi | Hindi | 3 | 100% | 100% |
 | Arabic | English | 10 | 80% | 100% |
 | Arabic | Arabic | 3 | 100% | 100% |
+| Malayalam | English | 10 | 40% | 50% |
+| Malayalam | Malayalam | 3 | 33% | 67% |
 
 What the numbers showed:
 
@@ -68,6 +72,26 @@ What the numbers showed:
 
 Small test sets: treat differences of one or two questions as noise.
 
+### Malayalam: what went wrong and what helped
+
+Malayalam is the weakest result, and the reason is speech recognition, not search.
+
+1. **Wrong alphabet.** Whisper large-v3 wrote the Malayalam audiobook entirely in Gurmukhi (Punjabi
+   script); large-v2 wrote it in Kannada. The sounds were right, the letters were not. The script repair
+   moves each letter into the Malayalam block. With large-v2 (whose Kannada maps onto Malayalam almost
+   letter for letter) the transcript became readable Malayalam, so Moments uses large-v2 for Malayalam.
+2. **Different transcript on every run.** When Whisper loops it retries with random sampling, so runs
+   differed; one run found the right moment first for 70% of English questions, another for 40%. A fixed
+   random seed now makes runs identical (`eval/repeatability.py`).
+3. **Skipped speech.** Even repeatable, Whisper drops whole sentences of this recording (the one about
+   the child's 12 days in hospital, for example), and no repair can bring those back. That caps the score.
+4. **Keyword matching on joined words.** Malayalam glues words together, so whole words from an imperfect
+   transcript rarely match. Matching 3-letter pieces of words instead lifted keyword search on the
+   Malayalam questions from 0% to 100% first place, on the version of the transcript that contained them.
+
+The next step would be a speech model trained for Malayalam (for example Digital University Kerala's
+fine-tuned Whisper or wav2vec2-BERT models), measured the same way.
+
 ## Run it
 
 ```bash
@@ -80,6 +104,10 @@ copy .env.example .env                           # add the API key used for writ
 .venv/Scripts/python -m moments ask "when is the exam?"
 .venv/Scripts/python -m uvicorn moments.api:app --port 8010     # the web page
 ```
+
+`MOMENTS_DEMO=1` runs the page without uploads (for hosting without a GPU) over an existing library;
+`python eval/attach_samples.py` points the sample videos at copies on Wikimedia Commons that every browser
+plays, with their credit lines.
 
 Transcription needs an NVIDIA GPU (tested on an RTX 4060, 8 GB). Search runs on the CPU too.
 

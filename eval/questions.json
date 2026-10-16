@@ -1,5 +1,5 @@
 {
- "note": "Answer ranges are [start, end] seconds where the answer is spoken, read from each video's timed transcript. Malayalam ranges were read from the script-repaired Whisper large-v2 transcript; they are audio times and apply to any engine.",
+ "note": "Answer ranges are [start, end] seconds where the answer is spoken, read from each video's timed transcript. Malayalam ranges were read from the script-repaired Whisper large-v2 transcript; they are audio times and apply to any engine. An empty answer list means the video does not cover the question; those test whether written answers say so instead of guessing, and are skipped when scoring search.",
  "videos": [
   {
    "file": "en_reticulum_rex.ogv",
@@ -123,6 +123,11 @@
        240.3
       ]
      ]
+    },
+    {
+     "question": "How many employees does Creative Commons have?",
+     "language": "en",
+     "answer": []
     }
    ]
   },
@@ -288,6 +293,11 @@
        53.8
       ]
      ]
+    },
+    {
+     "question": "How many employees does Creative Commons have?",
+     "language": "en",
+     "answer": []
     }
    ]
   },
@@ -403,6 +413,11 @@
        54.9
       ]
      ]
+    },
+    {
+     "question": "How much did the new parliament building cost?",
+     "language": "en",
+     "answer": []
     }
    ]
   },
@@ -538,6 +553,11 @@
        305.4
       ]
      ]
+    },
+    {
+     "question": "In which year was Dura-Europos first excavated?",
+     "language": "en",
+     "answer": []
     }
    ]
   },

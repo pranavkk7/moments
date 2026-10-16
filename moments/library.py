@@ -130,6 +130,12 @@ class Library:
             raise LibraryError(f"No video with id {video_id!r} in the library.")
         return json.loads(path.read_text("utf-8"))
 
+    def update_meta(self, video_id, **fields):
+        """Adds or replaces fields in a video's meta.json (for example where a sample can be streamed from)."""
+        meta = {**self.meta(video_id), **fields}
+        (self._dir(video_id) / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), "utf-8")
+        return meta
+
     def script(self, video_id):
         """The writing system of a video's transcript, worked out once and remembered."""
         if video_id not in self._scripts:

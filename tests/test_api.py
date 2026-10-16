@@ -88,5 +88,19 @@ def test_without_a_working_model_the_closest_moments_are_still_shown(library, mo
     job_id = client.post("/api/videos", files={"file": ("a.mp4", b"x", "video/mp4")}).json()["job_id"]
     wait_for(client, job_id)
     body = client.post("/api/ask", json={"question": "when is the exam"}).json()
-    assert body["written"] is False and "No API key" in body["answer"]
+    assert body["written"] is False and "isn't available" in body["answer"]
+    assert "API" not in body["answer"]  # the technical reason is logged, not shown to visitors
     assert len(body["citations"]) == 3 and "exam is in march" in body["citations"][0]["text"]
+
+
+def test_demo_mode_turns_uploads_off_and_streams_published_copies(library, media):
+    video_id = library.add(media("sample.ogv"), transcript(["hello there"] * 20))
+    library.update_meta(video_id, media_url="https://upload.example.org/sample.webm",
+                        credit={"author": "A. Author", "license": "CC BY-SA 4.0", "page": "https://example.org"})
+    client = TestClient(create_app(library=library, llm=FakeLLM({}), demo=True))
+    assert client.get("/api/config").json() == {"uploads": False}
+    refused = client.post("/api/videos", files={"file": ("a.mp4", b"x", "video/mp4")})
+    assert refused.status_code == 403 and "turned off" in refused.json()["detail"]
+    redirect = client.get(f"/media/{video_id}", follow_redirects=False)
+    assert redirect.status_code == 307 and redirect.headers["location"].endswith("sample.webm")
+    assert client.get("/api/videos").json()[0]["credit"]["license"] == "CC BY-SA 4.0"

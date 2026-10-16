@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Speech recognition comes from PolySub, checked out beside this project.
+      - uses: actions/checkout@v4
+        with:
+          repository: pranavkk7/polysub
+          path: polysub
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # The tests replace the speech models, the embedding model and the LLM with stand-ins:
+      # no GPU, model download or API key needed.
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -q
+        env:
+          PYTHONPATH: polysub

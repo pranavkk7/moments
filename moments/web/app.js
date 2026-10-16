@@ -46,6 +46,7 @@ function play(videoId, start) {
     player.src = `/media/${encodeURIComponent(videoId)}`
     player.hidden = false
     empty.hidden = true
+    showCredit()
   }
   const seek = () => {
     player.currentTime = start
@@ -54,6 +55,15 @@ function play(videoId, start) {
   if (player.readyState >= 1) seek()
   else player.addEventListener('loadedmetadata', seek, { once: true })
   drawMarks()
+}
+
+// Sample videos carry their author and licence, shown under the player as their licences require.
+function showCredit() {
+  const credit = $('[data-credit]')
+  credit.hidden = !current?.credit
+  if (!current?.credit) return
+  const link = Object.assign(document.createElement('a'), { href: current.credit.page, textContent: current.title, target: '_blank', rel: 'noopener' })
+  credit.replaceChildren(link, ` by ${current.credit.author}, ${current.credit.license}, via Wikimedia Commons`)
 }
 
 // Yellow spans on the timeline, one per cited moment of the loaded video.
@@ -181,6 +191,10 @@ form.addEventListener('submit', async (event) => {
     button.disabled = false
   }
 })
+
+api('/api/config').then((config) => {
+  $('[data-open-upload]').hidden = !config.uploads
+}).catch(() => {})
 
 loadVideos().catch((error) => {
   result.replaceChildren(Object.assign(document.createElement('p'), { className: 'answer-error', textContent: error.message }))

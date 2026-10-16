@@ -28,6 +28,8 @@
 
 * { box-sizing: border-box; }
 
+[hidden] { display: none !important; } /* the attribute wins over display: grid/flex below */
+
 body {
   margin: 0;
   background: var(--paper);
@@ -134,6 +136,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
   cursor: pointer;
   padding: 0;
 }
+
+.credit { margin: 8px 2px 0; font-size: 12px; color: var(--muted); }
+.credit a { color: inherit; }
 
 .now {
   margin-top: 14px;

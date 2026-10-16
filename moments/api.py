@@ -5,7 +5,11 @@
 Transcription uses the GPU, which holds one speech model at a time, so uploads wait in a queue and a
 single worker processes them in order. The page polls the job for progress. Videos are streamed with
 range requests, so the player can jump straight to a cited moment without downloading the whole file.
+
+With MOMENTS_DEMO=1 (a hosted demo without a GPU) uploads are turned off and the page searches the
+library it was given; sample videos stream from where they are published (meta "media_url").
 """
+import logging
 import os
 import queue
 import shutil
@@ -15,7 +19,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -24,6 +28,7 @@ from .library import Library, LibraryError
 
 PROJECT = Path(__file__).resolve().parents[1]
 load_dotenv(PROJECT / ".env")
+log = logging.getLogger("moments")
 
 WEB = Path(__file__).parent / "web"
 MAX_UPLOAD_BYTES = 2 * 1024**3  # 2 GB
@@ -84,11 +89,16 @@ class Question(BaseModel):
     video_id: str | None = None
 
 
-def create_app(library=None, jobs=None, llm=None):
+def create_app(library=None, jobs=None, llm=None, demo=None):
     library = library or Library(os.environ.get("MOMENTS_DATA", PROJECT / "data"))
-    jobs = jobs or Jobs(library)
+    demo = os.environ.get("MOMENTS_DEMO") == "1" if demo is None else demo
+    jobs = jobs or (None if demo else Jobs(library))
     app = FastAPI(title="Moments")
     uploads = library.root / "uploads"
+
+    @app.get("/api/config")
+    def config():
+        return {"uploads": not demo}
 
     @app.get("/api/videos")
     def videos():
@@ -96,6 +106,8 @@ def create_app(library=None, jobs=None, llm=None):
 
     @app.post("/api/videos", status_code=202)
     def upload(file: UploadFile = File(...), language: str = Form(""), title: str = Form("")):
+        if demo:
+            raise HTTPException(403, "Uploads are turned off in this demo. Try the sample videos.")
         suffix = Path(file.filename or "").suffix.lower()
         if suffix not in MEDIA_TYPES:
             raise HTTPException(400, "That file type isn't supported. Upload a video or audio file.")
@@ -110,7 +122,7 @@ def create_app(library=None, jobs=None, llm=None):
 
     @app.get("/api/jobs/{job_id}")
     def job(job_id: str):
-        state = jobs.get(job_id)
+        state = jobs.get(job_id) if jobs else None
         if state is None:
             raise HTTPException(404, "No such job.")
         return state
@@ -137,9 +149,11 @@ def create_app(library=None, jobs=None, llm=None):
         try:
             result = answer(body.question, hits, titles, llm=llm)
         except AnswerError as error:
-            # Search still works without the model: show the closest moments and say why there is no
-            # written answer, rather than failing the whole question.
-            return {"answer": f"{error} These are the closest moments:", "found": False, "written": False,
+            # Search still works without the model: show the closest moments rather than failing the
+            # whole question. The reason goes to the server log, not to visitors.
+            log.warning("No written answer: %s", error)
+            return {"answer": "A written answer isn't available right now. These are the closest moments:",
+                    "found": False, "written": False,
                     "citations": [cite(h.video_id, h.segment.start, h.segment.end, h.segment.text) for h in hits[:3]]}
         return {"answer": result.text, "found": result.found, "written": True,
                 "citations": [cite(c.video_id, c.start, c.end, c.text) for c in result.citations]}
@@ -147,9 +161,13 @@ def create_app(library=None, jobs=None, llm=None):
     @app.get("/media/{video_id}")
     def media(video_id: str):
         try:
-            source = Path(library.meta(video_id)["source"])
+            meta = library.meta(video_id)
         except LibraryError as error:
             raise HTTPException(404, str(error)) from error
+        if meta.get("media_url"):
+            # A published copy every browser can play (Chrome and Edge no longer play Ogg Theora).
+            return RedirectResponse(meta["media_url"])
+        source = Path(meta["source"])
         if not source.exists():
             raise HTTPException(404, "The original file has been moved or deleted.")
         # FileResponse answers range requests, which is what lets the player seek to a moment.

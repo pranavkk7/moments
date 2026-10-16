@@ -45,3 +45,31 @@ def test_end_to_end_on_a_small_library(library, media, tmp_path):
     results = evaluate(library, cases, k=3)
     assert results["hybrid"][("all", "")]["hit@3"] == 1.0
     assert set(results) == {"hybrid", "meaning", "keyword"}
+
+
+def test_written_answers_are_scored_for_citations_and_for_admitting_gaps(library, media, tmp_path):
+    from moments.evaluate import evaluate_answers
+
+    from .test_answer import FakeLLM
+
+    talk = ["intro words here"] * 60 + ["the exam is in march"] * 3 + ["more filler words"] * 60
+    library.add(media("lecture.mp4"), transcript(talk))
+    exam_start = 60 * 3 * 0.5 + 60 * 1.0
+    questions = {"videos": [{"file": "lecture.mp4", "questions": [
+        {"question": "when is the exam", "language": "en", "answer": [[exam_start, exam_start + 6]]},
+        {"question": "where is the car park", "language": "en", "answer": []}]}]}
+    qpath = tmp_path / "q.json"
+    qpath.write_text(json.dumps(questions), "utf-8")
+    cases = load_cases(qpath, library)
+    assert evaluate(library, cases, k=3)["hybrid"][("all", "")]["questions"] == 1  # the gap is not searched for
+
+    class ByQuestion(FakeLLM):
+        def complete(self, system, prompt, schema):
+            if "car park" in prompt:
+                return {"found": False, "answer": "The video does not cover that.", "moments": []}
+            line = next(x for x in prompt.splitlines() if "exam is in march" in x)
+            return {"found": True, "answer": "In March.", "moments": [int(line[1:line.index("]")])]}
+
+    scores = evaluate_answers(library, cases, llm=ByQuestion({}))
+    assert scores["cited right"] == 1.0 and scores["said not covered"] == 1.0
+    assert scores["answerable"] == 1 and scores["not covered"] == 1

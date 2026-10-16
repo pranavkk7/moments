@@ -127,17 +127,22 @@ def create_app(library=None, jobs=None, llm=None):
         try:
             titles = {m["id"]: m["title"] for m in library.videos()}
             hits = library.search(body.question, video_id=body.video_id, k=6)
-            result = answer(body.question, hits, titles, llm=llm)
         except LibraryError as error:
             raise HTTPException(400, str(error)) from error
+
+        def cite(video_id, start, end, text):
+            return {"video_id": video_id, "title": titles.get(video_id, video_id), "start": start, "end": end,
+                    "text": text}
+
+        try:
+            result = answer(body.question, hits, titles, llm=llm)
         except AnswerError as error:
-            raise HTTPException(502, str(error)) from error
-        return {
-            "answer": result.text,
-            "found": result.found,
-            "citations": [{"video_id": c.video_id, "title": titles.get(c.video_id, c.video_id),
-                           "start": c.start, "end": c.end, "text": c.text} for c in result.citations],
-        }
+            # Search still works without the model: show the closest moments and say why there is no
+            # written answer, rather than failing the whole question.
+            return {"answer": f"{error} These are the closest moments:", "found": False, "written": False,
+                    "citations": [cite(h.video_id, h.segment.start, h.segment.end, h.segment.text) for h in hits[:3]]}
+        return {"answer": result.text, "found": result.found, "written": True,
+                "citations": [cite(c.video_id, c.start, c.end, c.text) for c in result.citations]}
 
     @app.get("/media/{video_id}")
     def media(video_id: str):

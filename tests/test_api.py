@@ -71,3 +71,22 @@ def test_unsupported_files_and_unknown_ids_are_refused(client):
 def test_the_page_and_its_assets_are_served(client):
     assert "Moments" in client.get("/").text
     assert client.get("/static/app.js").status_code == 200
+
+
+def test_without_a_working_model_the_closest_moments_are_still_shown(library, monkeypatch):
+    from moments.answer import AnswerError
+
+    class BrokenLLM:
+        label = "broken"
+
+        def complete(self, *args):
+            raise AnswerError("No API key: set ANTHROPIC_API_KEY in .env to get written answers.")
+
+    monkeypatch.setattr("moments.library.transcribe",
+                        lambda path, **kw: transcript(["intro words here"] * 100 + ["the exam is in march"] * 3))
+    client = TestClient(create_app(library=library, jobs=Jobs(library, pool=FakePool()), llm=BrokenLLM()))
+    job_id = client.post("/api/videos", files={"file": ("a.mp4", b"x", "video/mp4")}).json()["job_id"]
+    wait_for(client, job_id)
+    body = client.post("/api/ask", json={"question": "when is the exam"}).json()
+    assert body["written"] is False and "No API key" in body["answer"]
+    assert len(body["citations"]) == 3 and "exam is in march" in body["citations"][0]["text"]

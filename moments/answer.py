@@ -103,7 +103,10 @@ class AnthropicLLM:
 
             if not os.environ.get("ANTHROPIC_API_KEY"):
                 raise AnswerError("No API key: set ANTHROPIC_API_KEY in .env to get written answers.")
-            client = anthropic.Anthropic(timeout=60.0, max_retries=2)
+            # The endpoint is Moments' own setting: a base URL inherited from another tool's environment
+            # (developer tools set ANTHROPIC_BASE_URL for their own use) must not redirect the app's calls.
+            base_url = os.environ.get("MOMENTS_LLM_BASE_URL") or "https://api.anthropic.com"
+            client = anthropic.Anthropic(base_url=base_url, timeout=60.0, max_retries=2)
         self.client = client
         self.model = model
         self.effort = effort

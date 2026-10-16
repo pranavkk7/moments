@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from moments.library import LibraryError, tokens, video_id_for
+from moments.library import LibraryError, script_of, tokens, video_id_for
 
 from .conftest import transcript
 
@@ -86,3 +86,32 @@ def test_helpful_errors(library, media):
 def test_tokens_split_words_or_character_pairs():
     assert tokens("When is the EXAM?", "en") == ["when", "is", "the", "exam"]
     assert tokens("試験は来週", "ja") == ["試験", "験は", "は来", "来週"]
+
+
+def test_search_modes_use_one_ranking_or_both(library, media):
+    talk = ["general remarks about the project"] * 30 + ["contractor Zubair Al Mansoori signed in 2019"] * 3
+    library.add(media("meeting.mp4"), transcript(talk))
+    keyword_only = library.search("Mansoori", k=3, mode="keyword")
+    assert all(h.meaning_rank is None for h in keyword_only) and keyword_only[0].keyword_rank == 1
+    assert all(h.keyword_rank is None for h in library.search("Mansoori", k=3, mode="meaning"))
+    with pytest.raises(ValueError):
+        library.search("Mansoori", mode="fuzzy")
+
+
+def test_script_of_text():
+    assert script_of("When is the exam?") == "LATIN"
+    assert script_of("試験はいつですか") == "CJK"  # kana and kanji count as one script
+    assert script_of("പരീക്ഷ എപ്പോഴാണ്?") == "MALAYALAM"
+    assert script_of("परीक्षा कब है?") == "DEVANAGARI"
+    assert script_of("123 ?!") == ""
+
+
+def test_keywords_do_not_count_across_scripts(library, media):
+    # "MIT" appears in the Japanese transcript, and keyword search finds it, but an English question is
+    # scored on meaning alone for a Japanese video.
+    talk = ["今日 は 土 の 話 を します"] * 40 + ["MIT の 講義 です"] * 3 + ["水 と 粘土 の 話"] * 40
+    ja = library.add(media("ja.mp4", b"j"), transcript(talk, language="ja"))
+    for h in library.search("MIT lecture", video_id=ja, k=5):
+        assert h.score == pytest.approx(1 / (60 + h.meaning_rank), abs=1e-5)
+    same_script = library.search("MIT", video_id=ja, k=5, mode="keyword")
+    assert same_script and "MIT" in same_script[0].segment.text

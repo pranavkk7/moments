@@ -4,7 +4,8 @@ Search combines two rankings, because each misses what the other finds:
 - meaning (dense vectors): finds a Malayalam moment for an English question, and paraphrases;
 - keywords (BM25 on the transcript): finds exact names, numbers and rare terms that vectors blur.
 The two lists are merged with reciprocal rank fusion, which needs no tuning of score scales: a window
-ranked high by either method rises, and one ranked high by both rises most.
+ranked high by either method rises, and one ranked high by both rises most. Keyword matches only count
+when the question is written in the same script as the video; across languages, meaning alone decides.
 
 Layout under the data folder:
     videos/<id>/meta.json        title, source file, language, engine, duration
@@ -15,6 +16,7 @@ Layout under the data folder:
 import hashlib
 import json
 import re
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -27,6 +29,10 @@ from .transcribe import transcribe
 
 RRF_K = 60  # the usual constant: damps the gap between rank 1 and rank 2
 CANDIDATES = 30  # how many windows each method contributes before fusion
+# How much keyword matches count when the question and the video are in different scripts. Matching the
+# words of an English question against a Japanese transcript is mostly noise, and on the test set it
+# pulled the right moment down (see the README); only meaning connects the two languages.
+CROSS_SCRIPT_KEYWORD_WEIGHT = 0.0
 
 
 class LibraryError(Exception):
@@ -54,6 +60,18 @@ def video_id_for(path):
     return f"{slug}-{digest.hexdigest()[:8]}"
 
 
+def script_of(text):
+    """The writing system most of the letters in `text` belong to: "LATIN", "CJK", "DEVANAGARI",
+    "MALAYALAM", "ARABIC", ... Japanese kana and Chinese characters count as one script, "CJK"."""
+    counts = {}
+    for ch in text:
+        if ch.isalpha():
+            name = unicodedata.name(ch, "").split(" ")[0]
+            name = "CJK" if name in ("CJK", "HIRAGANA", "KATAKANA") else name
+            counts[name] = counts.get(name, 0) + 1
+    return max(counts, key=counts.get) if counts else ""
+
+
 def tokens(text, language):
     """Words for keyword search. Languages written without spaces are split into character pairs."""
     text = text.lower()
@@ -68,6 +86,7 @@ class Library:
         self.root = Path(root)
         self.embedder = embedder or Embedder()
         self._collection = None
+        self._scripts = {}  # video id -> writing system of its transcript
 
     # ---------- storage ----------
 
@@ -101,6 +120,12 @@ class Library:
         if not path.exists():
             raise LibraryError(f"No video with id {video_id!r} in the library.")
         return json.loads(path.read_text("utf-8"))
+
+    def script(self, video_id):
+        """The writing system of a video's transcript, worked out once and remembered."""
+        if video_id not in self._scripts:
+            self._scripts[video_id] = script_of(" ".join(s.text for s in self.segments(video_id)[:5]))
+        return self._scripts[video_id]
 
     def segments(self, video_id):
         data = json.loads((self._dir(video_id) / "segments.json").read_text("utf-8"))
@@ -136,6 +161,7 @@ class Library:
             json.dumps([s.to_dict() for s in segments], ensure_ascii=False, indent=1), "utf-8")
         (folder / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), "utf-8")
 
+        self._scripts.pop(video_id, None)
         # Re-adding a video replaces its windows rather than duplicating them.
         self.collection.delete(where={"video_id": video_id})
         self.collection.add(
@@ -149,7 +175,11 @@ class Library:
 
     # ---------- search ----------
 
-    def search(self, query, video_id=None, k=5):
+    def search(self, query, video_id=None, k=5, mode="hybrid"):
+        """The k best windows for a question. `mode` is "hybrid" (the default), or "meaning" / "keyword" to
+        use one ranking alone, which is how the evaluation measures what each contributes."""
+        if mode not in ("hybrid", "meaning", "keyword"):
+            raise ValueError(f"Unknown search mode: {mode}")
         query = (query or "").strip()
         if not query:
             raise LibraryError("Type a question first.")
@@ -158,13 +188,18 @@ class Library:
             raise LibraryError("The library is empty. Add a video first.")
         windows = {(m["id"], s.index): s for m in targets for s in self.segments(m["id"])}
 
-        meaning = self._meaning_ranking(query, video_id, len(windows))
-        keyword = self._keyword_ranking(query, targets, windows)
+        meaning = self._meaning_ranking(query, video_id, len(windows)) if mode != "keyword" else []
+        keyword = self._keyword_ranking(query, targets, windows) if mode != "meaning" else []
 
+        question_script = script_of(query)
+        keyword_weight = {m["id"]: 1.0 if mode == "keyword" or self.script(m["id"]) == question_script
+                          else CROSS_SCRIPT_KEYWORD_WEIGHT for m in targets}
         scores = {}
-        for ranking in (meaning, keyword):
-            for rank, key in enumerate(ranking, start=1):
-                scores[key] = scores.get(key, 0.0) + 1.0 / (RRF_K + rank)
+        for rank, key in enumerate(meaning, start=1):
+            scores[key] = scores.get(key, 0.0) + 1.0 / (RRF_K + rank)
+        for rank, key in enumerate(keyword, start=1):
+            if keyword_weight[key[0]]:
+                scores[key] = scores.get(key, 0.0) + keyword_weight[key[0]] / (RRF_K + rank)
         best = sorted(scores, key=scores.get, reverse=True)[:k]
         language_of = {m["id"]: m["language"] for m in targets}
         return [Hit(key[0], windows[key], round(scores[key], 5),

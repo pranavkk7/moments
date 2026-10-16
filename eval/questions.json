@@ -1,0 +1,545 @@
+{
+ "note": "Answer ranges are [start, end] seconds where the answer is spoken, read from each video's timed transcript.",
+ "videos": [
+  {
+   "file": "en_reticulum_rex.ogv",
+   "questions": [
+    {
+     "question": "Who recommended Cory Doctorow's novel to his customers?",
+     "language": "en",
+     "answer": [
+      [
+       124.0,
+       128.8
+      ]
+     ]
+    },
+    {
+     "question": "Which universities shared their coursework online for free?",
+     "language": "en",
+     "answer": [
+      [
+       55.8,
+       62.8
+      ]
+     ]
+    },
+    {
+     "question": "Where did an academic program start translating MIT's course materials?",
+     "language": "en",
+     "answer": [
+      [
+       112.5,
+       117.8
+      ]
+     ]
+    },
+    {
+     "question": "Which musician inspired the new sampling tool?",
+     "language": "en",
+     "answer": [
+      [
+       194.8,
+       217.7
+      ]
+     ]
+    },
+    {
+     "question": "How many licensed works were there after twelve months?",
+     "language": "en",
+     "answer": [
+      [
+       256.1,
+       264.0
+      ]
+     ]
+    },
+    {
+     "question": "What is OpSound and what can people do with it?",
+     "language": "en",
+     "answer": [
+      [
+       63.8,
+       82.9
+      ]
+     ]
+    },
+    {
+     "question": "Who adapts the licenses to the legal systems of different countries?",
+     "language": "en",
+     "answer": [
+      [
+       170.1,
+       179.4
+      ]
+     ]
+    },
+    {
+     "question": "What did the publisher Tim O'Reilly help create?",
+     "language": "en",
+     "answer": [
+      [
+       146.0,
+       155.6
+      ]
+     ]
+    },
+    {
+     "question": "How many licensed works existed about eight months after the start?",
+     "language": "en",
+     "answer": [
+      [
+       180.3,
+       189.6
+      ]
+     ]
+    },
+    {
+     "question": "Which two musicians played a duet together without ever meeting?",
+     "language": "en",
+     "answer": [
+      [
+       101.8,
+       112.0
+      ]
+     ]
+    },
+    {
+     "question": "What future plans are mentioned, such as republishing out-of-print books?",
+     "language": "en",
+     "answer": [
+      [
+       264.7,
+       287.5
+      ]
+     ]
+    },
+    {
+     "question": "What does a sampling license let other people do with your work?",
+     "language": "en",
+     "answer": [
+      [
+       227.0,
+       240.3
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "file": "ja_reticulum_rex.ogv",
+   "questions": [
+    {
+     "question": "Who recommended Cory Doctorow's novel to his customers?",
+     "language": "en",
+     "answer": [
+      [
+       125.5,
+       129.0
+      ]
+     ]
+    },
+    {
+     "question": "Which universities shared their coursework online for free?",
+     "language": "en",
+     "answer": [
+      [
+       56.1,
+       60.9
+      ]
+     ]
+    },
+    {
+     "question": "Where did an academic program start translating MIT's course materials?",
+     "language": "en",
+     "answer": [
+      [
+       112.0,
+       117.4
+      ]
+     ]
+    },
+    {
+     "question": "Which musician inspired the new sampling tool?",
+     "language": "en",
+     "answer": [
+      [
+       194.8,
+       203.5
+      ]
+     ]
+    },
+    {
+     "question": "How many licensed works were there after twelve months?",
+     "language": "en",
+     "answer": [
+      [
+       252.6,
+       261.5
+      ]
+     ]
+    },
+    {
+     "question": "What is OpSound and what can people do with it?",
+     "language": "en",
+     "answer": [
+      [
+       63.5,
+       71.0
+      ]
+     ]
+    },
+    {
+     "question": "Who adapts the licenses to the legal systems of different countries?",
+     "language": "en",
+     "answer": [
+      [
+       170.1,
+       180.6
+      ]
+     ]
+    },
+    {
+     "question": "What did the publisher Tim O'Reilly help create?",
+     "language": "en",
+     "answer": [
+      [
+       145.5,
+       154.5
+      ]
+     ]
+    },
+    {
+     "question": "How many licensed works existed about eight months after the start?",
+     "language": "en",
+     "answer": [
+      [
+       181.1,
+       188.4
+      ]
+     ]
+    },
+    {
+     "question": "Which two musicians played a duet together without ever meeting?",
+     "language": "en",
+     "answer": [
+      [
+       101.8,
+       108.2
+      ]
+     ]
+    },
+    {
+     "question": "What future plans are mentioned, such as republishing out-of-print books?",
+     "language": "en",
+     "answer": [
+      [
+       266.7,
+       276.8
+      ]
+     ]
+    },
+    {
+     "question": "What does a sampling license let other people do with your work?",
+     "language": "en",
+     "answer": [
+      [
+       228.1,
+       238.3
+      ]
+     ]
+    },
+    {
+     "question": "ジェフ・ベゾスは何をしましたか？",
+     "language": "ja",
+     "answer": [
+      [
+       125.5,
+       129.0
+      ]
+     ]
+    },
+    {
+     "question": "サンプリングライセンスとは何ですか？",
+     "language": "ja",
+     "answer": [
+      [
+       228.1,
+       238.3
+      ]
+     ]
+    },
+    {
+     "question": "iCommonsはどんな活動をしていますか？",
+     "language": "ja",
+     "answer": [
+      [
+       170.1,
+       180.6
+      ]
+     ]
+    },
+    {
+     "question": "最初にCCマークを使った作家は誰ですか？",
+     "language": "ja",
+     "answer": [
+      [
+       44.4,
+       53.8
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "file": "hi_sengol.webm",
+   "questions": [
+    {
+     "question": "How many workers contributed to building the new parliament building?",
+     "language": "en",
+     "answer": [
+      [
+       47.5,
+       54.9
+      ]
+     ]
+    },
+    {
+     "question": "From whom did the Prime Minister accept the Sengol?",
+     "language": "en",
+     "answer": [
+      [
+       61.1,
+       74.1
+      ]
+     ]
+    },
+    {
+     "question": "Which language does the word Sengol come from, and what does it mean?",
+     "language": "en",
+     "answer": [
+      [
+       74.1,
+       89.3
+      ]
+     ]
+    },
+    {
+     "question": "What sits on top of the Sengol?",
+     "language": "en",
+     "answer": [
+      [
+       82.1,
+       97.4
+      ]
+     ]
+    },
+    {
+     "question": "When did Jawaharlal Nehru receive the Sengol?",
+     "language": "en",
+     "answer": [
+      [
+       89.3,
+       112.2
+      ]
+     ]
+    },
+    {
+     "question": "In which museum was the Sengol found?",
+     "language": "en",
+     "answer": [
+      [
+       204.7,
+       221.5
+      ]
+     ]
+    },
+    {
+     "question": "Which empire does the Sengol tradition come from?",
+     "language": "en",
+     "answer": [
+      [
+       214.0,
+       236.0
+      ]
+     ]
+    },
+    {
+     "question": "Where was the Sengol installed?",
+     "language": "en",
+     "answer": [
+      [
+       262.4,
+       277.9
+      ]
+     ]
+    },
+    {
+     "question": "सेंगोल कहाँ मिला?",
+     "language": "hi",
+     "answer": [
+      [
+       204.7,
+       221.5
+      ]
+     ]
+    },
+    {
+     "question": "नेहरू ने सेंगोल कब स्वीकार किया था?",
+     "language": "hi",
+     "answer": [
+      [
+       97.4,
+       112.2
+      ]
+     ]
+    },
+    {
+     "question": "नए संसद भवन को बनाने में कितने श्रमिकों ने योगदान दिया?",
+     "language": "hi",
+     "answer": [
+      [
+       47.5,
+       54.9
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "file": "ar_dura_europos_djuss.webm",
+   "questions": [
+    {
+     "question": "In which years did the speaker lead the Syrian side of the joint Syrian-French mission?",
+     "language": "en",
+     "answer": [
+      [
+       17.6,
+       34.3
+      ]
+     ]
+    },
+    {
+     "question": "What is the most notable discovery at Dura-Europos?",
+     "language": "en",
+     "answer": [
+      [
+       86.4,
+       103.1
+      ]
+     ]
+    },
+    {
+     "question": "How many temples were found at Dura-Europos?",
+     "language": "en",
+     "answer": [
+      [
+       109.5,
+       133.1
+      ]
+     ]
+    },
+    {
+     "question": "What was the main building material at Dura-Europos?",
+     "language": "en",
+     "answer": [
+      [
+       115.2,
+       150.1
+      ]
+     ]
+    },
+    {
+     "question": "How long does burning the stones in the kiln take?",
+     "language": "en",
+     "answer": [
+      [
+       187.7,
+       195.7
+      ]
+     ]
+    },
+    {
+     "question": "What is the kiln for burning the plaster stones called?",
+     "language": "en",
+     "answer": [
+      [
+       181.6,
+       195.7
+      ]
+     ]
+    },
+    {
+     "question": "Why is one kind of plaster called black plaster?",
+     "language": "en",
+     "answer": [
+      [
+       237.6,
+       250.5
+      ]
+     ]
+    },
+    {
+     "question": "Why is the plaster widely used in modern houses in Deir ez-Zor?",
+     "language": "en",
+     "answer": [
+      [
+       287.5,
+       305.4
+      ]
+     ]
+    },
+    {
+     "question": "What is the scientific name of the stone the plaster is made from?",
+     "language": "en",
+     "answer": [
+      [
+       292.6,
+       312.3
+      ]
+     ]
+    },
+    {
+     "question": "How does the plaster help buildings in a hot, dry climate?",
+     "language": "en",
+     "answer": [
+      [
+       401.5,
+       442.2
+      ]
+     ]
+    },
+    {
+     "question": "كم يوماً تستمر عملية الحرق؟",
+     "language": "ar",
+     "answer": [
+      [
+       187.7,
+       195.7
+      ]
+     ]
+    },
+    {
+     "question": "ما هو أبرز اكتشاف في دورا أوروبوس؟",
+     "language": "ar",
+     "answer": [
+      [
+       86.4,
+       103.1
+      ]
+     ]
+    },
+    {
+     "question": "لماذا يستخدم الجص في المنازل الحديثة؟",
+     "language": "ar",
+     "answer": [
+      [
+       287.5,
+       305.4
+      ]
+     ]
+    }
+   ]
+  }
+ ]
+}

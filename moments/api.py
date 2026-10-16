@@ -8,6 +8,9 @@ range requests, so the player can jump straight to a cited moment without downlo
 
 With MOMENTS_DEMO=1 (a hosted demo without a GPU) uploads are turned off and the page searches the
 library it was given; sample videos stream from where they are published (meta "media_url").
+
+Written answers are optional. Without an LLM API key (or with MOMENTS_ANSWERS=off) Moments is a search
+product: a question returns the moments that answer it, which is everything the evaluation measures.
 """
 import logging
 import os
@@ -89,16 +92,21 @@ class Question(BaseModel):
     video_id: str | None = None
 
 
-def create_app(library=None, jobs=None, llm=None, demo=None):
+def answers_enabled():
+    return os.environ.get("MOMENTS_ANSWERS", "").lower() != "off" and bool(os.environ.get("ANTHROPIC_API_KEY"))
+
+
+def create_app(library=None, jobs=None, llm=None, demo=None, answers=None):
     library = library or Library(os.environ.get("MOMENTS_DATA", PROJECT / "data"))
     demo = os.environ.get("MOMENTS_DEMO") == "1" if demo is None else demo
+    answers = (llm is not None or answers_enabled()) if answers is None else answers
     jobs = jobs or (None if demo else Jobs(library))
     app = FastAPI(title="Moments")
     uploads = library.root / "uploads"
 
     @app.get("/api/config")
     def config():
-        return {"uploads": not demo}
+        return {"uploads": not demo, "answers": answers}
 
     @app.get("/api/videos")
     def videos():
@@ -146,6 +154,10 @@ def create_app(library=None, jobs=None, llm=None, demo=None):
             return {"video_id": video_id, "title": titles.get(video_id, video_id), "start": start, "end": end,
                     "text": text}
 
+        moments = [cite(h.video_id, h.segment.start, h.segment.end, h.segment.text) for h in hits[:3]]
+        if not answers:
+            return {"answer": "", "found": bool(moments), "written": False, "citations": moments}
+
         try:
             result = answer(body.question, hits, titles, llm=llm)
         except AnswerError as error:
@@ -153,8 +165,7 @@ def create_app(library=None, jobs=None, llm=None, demo=None):
             # whole question. The reason goes to the server log, not to visitors.
             log.warning("No written answer: %s", error)
             return {"answer": "A written answer isn't available right now. These are the closest moments:",
-                    "found": False, "written": False,
-                    "citations": [cite(h.video_id, h.segment.start, h.segment.end, h.segment.text) for h in hits[:3]]}
+                    "found": False, "written": False, "citations": moments}
         return {"answer": result.text, "found": result.found, "written": True,
                 "citations": [cite(c.video_id, c.start, c.end, c.text) for c in result.citations]}
 

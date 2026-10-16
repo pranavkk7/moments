@@ -98,9 +98,32 @@ def test_demo_mode_turns_uploads_off_and_streams_published_copies(library, media
     library.update_meta(video_id, media_url="https://upload.example.org/sample.webm",
                         credit={"author": "A. Author", "license": "CC BY-SA 4.0", "page": "https://example.org"})
     client = TestClient(create_app(library=library, llm=FakeLLM({}), demo=True))
-    assert client.get("/api/config").json() == {"uploads": False}
+    assert client.get("/api/config").json()["uploads"] is False
     refused = client.post("/api/videos", files={"file": ("a.mp4", b"x", "video/mp4")})
     assert refused.status_code == 403 and "turned off" in refused.json()["detail"]
     redirect = client.get(f"/media/{video_id}", follow_redirects=False)
     assert redirect.status_code == 307 and redirect.headers["location"].endswith("sample.webm")
     assert client.get("/api/videos").json()[0]["credit"]["license"] == "CC BY-SA 4.0"
+
+
+def test_without_an_api_key_moments_is_a_search_product(library, monkeypatch):
+    monkeypatch.setattr("moments.library.transcribe",
+                        lambda path, **kw: transcript(["intro words here"] * 100 + ["the exam is in march"] * 3))
+    client = TestClient(create_app(library=library, jobs=Jobs(library, pool=FakePool()), answers=False))
+    assert client.get("/api/config").json()["answers"] is False
+    job_id = client.post("/api/videos", files={"file": ("a.mp4", b"x", "video/mp4")}).json()["job_id"]
+    wait_for(client, job_id)
+    body = client.post("/api/ask", json={"question": "when is the exam"}).json()
+    assert body == {"answer": "", "found": True, "written": False, "citations": body["citations"]}
+    assert "exam is in march" in body["citations"][0]["text"]
+
+
+def test_answers_are_off_without_a_key_or_when_switched_off(monkeypatch):
+    from moments.api import answers_enabled
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert not answers_enabled()
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    assert answers_enabled()
+    monkeypatch.setenv("MOMENTS_ANSWERS", "off")
+    assert not answers_enabled()

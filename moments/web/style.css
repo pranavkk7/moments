@@ -194,6 +194,7 @@ textarea { resize: vertical; min-height: 84px; }
 
 .answer-text { margin: 0; white-space: pre-line; }
 .answer-missing { color: var(--muted); }
+.answer-heading { margin: 0; font-size: 13px; font-weight: 500; color: var(--muted); }
 .answer-error { color: var(--danger); margin: 0; }
 
 .cites { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 8px; }

@@ -12,6 +12,8 @@ const now = $('[data-now]')
 let videos = []
 let current = null // the video loaded in the player
 let marks = [] // citations for the loaded video
+let answers = false // whether the server writes answers (it needs an LLM API key) or only finds moments
+const askLabel = () => (answers ? 'Ask' : 'Find the moment')
 
 function formatTime(seconds) {
   const s = Math.floor(seconds)
@@ -120,7 +122,7 @@ $('[data-ask]').addEventListener('submit', async (event) => {
     result.replaceChildren(Object.assign(document.createElement('p'), { className: 'answer-error', textContent: error.message }))
   } finally {
     button.disabled = false
-    button.textContent = 'Ask'
+    button.textContent = askLabel()
   }
 })
 
@@ -128,8 +130,14 @@ function showAnswer(body) {
   const box = document.createElement('div')
   box.className = 'answer'
   const text = document.createElement('p')
-  text.className = body.found ? 'answer-text' : 'answer-text answer-missing'
-  text.textContent = body.answer
+  if (body.written || body.answer) {
+    text.className = body.found ? 'answer-text' : 'answer-text answer-missing'
+    text.textContent = body.answer
+  } else {
+    // Search only: the moments are the answer.
+    text.className = 'answer-heading'
+    text.textContent = marks.length ? 'Top moments' : 'Nothing in the video seems to match that question.'
+  }
   box.append(text)
   if (marks.length) {
     const list = document.createElement('ol')
@@ -194,6 +202,8 @@ form.addEventListener('submit', async (event) => {
 
 api('/api/config').then((config) => {
   $('[data-open-upload]').hidden = !config.uploads
+  answers = config.answers
+  $('[data-ask-button]').textContent = askLabel()
 }).catch(() => {})
 
 loadVideos().catch((error) => {

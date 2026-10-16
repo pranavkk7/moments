@@ -3,9 +3,13 @@
 **Ask any video, in any language, and jump to the moment that answers.**
 
 Upload a lecture, interview or meeting in Malayalam, Hindi, Arabic, Japanese, English or about 100 other
-languages. Ask a question in English or in the video's own language. Moments answers in a few sentences
-and points to the exact moments, and clicking one plays the video from there. When the video doesn't
-cover the question, it says so instead of guessing.
+languages. Ask a question in English or in the video's own language, and Moments takes you to the exact
+moments that answer it: clicking one plays the video from there. Everything runs on your own machine, with
+no API key and no per-question cost.
+
+Optionally, with an LLM API key, Moments also writes a short answer that cites those moments.
+
+![An English question about the Japanese version of a film. Moments jumps to 1:47, where the narrator says Jeff Bezos recommended the novel; yellow marks on the timeline show the three moments found.](docs/screenshot.png)
 
 ## How it works
 
@@ -13,7 +17,7 @@ cover the question, it says so instead of guessing.
 video ──► speech recognition ──► timed words ──► 40-second windows ──► vectors + keyword index
              (PolySub)            (repaired script)    (overlapping)       (ChromaDB, BM25)
 
-question ──► hybrid search (meaning + keywords, language-aware) ──► top moments ──► LLM answer
+question ──► hybrid search (meaning + keywords, language-aware) ──► top moments ──► (optional) LLM answer
                                                                                     with checked citations
 ```
 
@@ -30,8 +34,9 @@ question ──► hybrid search (meaning + keywords, language-aware) ──► 
    Malayalam answer; BM25 for exact names and numbers.
 5. **Search.** Both rankings are merged with reciprocal rank fusion. Keyword matches only count when the
    question is in the same script as the video; across languages, meaning alone decides (measured below).
-6. **Answer.** The LLM sees only the numbered moments, replies in a fixed JSON schema, and the code
-   checks that every cited moment is one it was actually given.
+6. **Answer (optional).** With an API key, an LLM sees only the numbered moments, replies in a fixed JSON
+   schema, and the code checks that every cited moment is one it was actually given. This part is covered
+   by unit tests; the results below measure search, which is what Moments does without a key.
 
 ## Results
 
@@ -97,11 +102,11 @@ fine-tuned Whisper or wav2vec2-BERT models), measured the same way.
 ```bash
 python -m venv --system-site-packages .venv     # reuses a CUDA build of PyTorch if installed globally
 .venv/Scripts/pip install -e ../polysub -r requirements.txt fastapi "uvicorn[standard]" python-multipart python-dotenv anthropic
-copy .env.example .env                           # add the API key used for written answers
+copy .env.example .env                           # optional: an API key for written answers
 
 .venv/Scripts/python -m moments add lecture.mp4 --language ml
 .venv/Scripts/python -m moments search "when is the exam?"
-.venv/Scripts/python -m moments ask "when is the exam?"
+.venv/Scripts/python -m moments ask "when is the exam?"                  # needs the optional API key
 .venv/Scripts/python -m uvicorn moments.api:app --port 8010     # the web page
 ```
 

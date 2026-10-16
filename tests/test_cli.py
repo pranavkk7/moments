@@ -5,9 +5,9 @@ from moments import cli
 from .conftest import transcript
 
 
-def run(library, *argv):
+def run(library, *argv, llm=None):
     out = io.StringIO()
-    code = cli.main(list(argv), library=library, out=out)
+    code = cli.main(list(argv), library=library, llm=llm, out=out)
     return code, out.getvalue()
 
 
@@ -34,3 +34,16 @@ def test_errors_are_reported_without_a_traceback(library, capsys):
     code, _ = run(library, "search", "anything")
     assert code == 1
     assert "library is empty" in capsys.readouterr().err
+
+
+def test_ask_prints_the_answer_and_its_moments(library, media):
+    from .test_answer import FakeLLM
+
+    library.add(media("lecture.mp4"), transcript(["intro words here"] * 100 + ["the exam is in march"] * 3),
+                title="Lecture one")
+    llm = FakeLLM({"found": True, "answer": "In March.", "moments": [1]})
+    code, text = run(library, "ask", "when is the exam", llm=llm)
+    assert code == 0
+    assert text.splitlines()[0] == "In March."
+    assert "> Lecture one  " in text
+    assert "exam is in march" in llm.prompts[0]

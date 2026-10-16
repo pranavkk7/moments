@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Moments</title>
+    <meta name="description" content="Ask any video, in any language, and jump to the moment that answers." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <header class="bar">
+      <a class="mark" href="/" aria-label="Moments, home"><span class="mark-dot" aria-hidden="true"></span>Moments</a>
+      <button class="btn btn-quiet" type="button" data-open-upload>Add a video</button>
+    </header>
+
+    <main class="layout">
+      <section class="stage" aria-label="Player">
+        <div class="screen">
+          <video controls preload="metadata" playsinline data-player hidden></video>
+          <div class="screen-empty" data-empty>
+            <p class="empty-title">Pick a video, then ask it anything.</p>
+            <p class="empty-text">Questions can be in any language. Answers point to the exact moment.</p>
+          </div>
+        </div>
+        <div class="timeline" data-timeline aria-label="Where the cited moments are">
+          <div class="timeline-track"><span class="timeline-head" data-head></span></div>
+        </div>
+        <div class="now" data-now hidden>
+          <p class="now-time" data-now-time></p>
+          <p class="now-text" data-now-text></p>
+        </div>
+      </section>
+
+      <section class="side" aria-label="Ask">
+        <label class="field">
+          <span class="field-label">Video</span>
+          <select data-videos><option value="">All videos</option></select>
+        </label>
+
+        <form class="ask" data-ask>
+          <label class="field">
+            <span class="field-label">Your question</span>
+            <textarea rows="3" maxlength="500" placeholder="When does the speaker explain the main idea?" data-question required></textarea>
+          </label>
+          <button class="btn" type="submit" data-ask-button>Ask</button>
+        </form>
+
+        <div class="result" data-result aria-live="polite"></div>
+      </section>
+    </main>
+
+    <dialog class="upload" data-upload>
+      <form class="upload-form" data-upload-form>
+        <h2 class="upload-title">Add a video</h2>
+        <p class="upload-text">Video or audio, any language. Transcribing takes about a third of the video's length.</p>
+        <label class="field">
+          <span class="field-label">File</span>
+          <input type="file" accept="video/*,audio/*" name="file" required />
+        </label>
+        <label class="field">
+          <span class="field-label">Title (optional)</span>
+          <input type="text" name="title" maxlength="120" />
+        </label>
+        <label class="field">
+          <span class="field-label">Spoken language (optional)</span>
+          <input type="text" name="language" maxlength="20" placeholder="Detected automatically, or e.g. Malayalam" />
+        </label>
+        <div class="upload-progress" data-upload-progress hidden>
+          <div class="meter"><span data-meter></span></div>
+          <p data-upload-status></p>
+        </div>
+        <div class="upload-actions">
+          <button class="btn btn-quiet" type="button" data-close-upload>Close</button>
+          <button class="btn" type="submit" data-upload-button>Upload and transcribe</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="/static/app.js" type="module"></script>
+  </body>
+</html>

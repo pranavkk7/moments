@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from polysub import languages
+from polysub.audio import AudioError
 
 from .embed import Embedder
 from .segments import Segment, build_segments
@@ -39,6 +40,7 @@ class Hit:
     score: float
     meaning_rank: int = None  # 1-based rank in the dense list, None if absent
     keyword_rank: int = None
+    language: str = ""
 
 
 def video_id_for(path):
@@ -111,7 +113,10 @@ class Library:
         path = Path(path)
         if not path.exists():
             raise LibraryError(f"File not found: {path}")
-        transcript = transcribe(path, pool=pool, language=language, progress=progress)
+        try:
+            transcript = transcribe(path, pool=pool, language=language, progress=progress)
+        except (ValueError, AudioError) as error:  # an unknown language, or a file FFmpeg cannot read
+            raise LibraryError(str(error)) from error
         return self.add(path, transcript, title=title)
 
     def add(self, path, transcript, title=None):
@@ -161,9 +166,11 @@ class Library:
             for rank, key in enumerate(ranking, start=1):
                 scores[key] = scores.get(key, 0.0) + 1.0 / (RRF_K + rank)
         best = sorted(scores, key=scores.get, reverse=True)[:k]
+        language_of = {m["id"]: m["language"] for m in targets}
         return [Hit(key[0], windows[key], round(scores[key], 5),
                     meaning.index(key) + 1 if key in meaning else None,
-                    keyword.index(key) + 1 if key in keyword else None)
+                    keyword.index(key) + 1 if key in keyword else None,
+                    language_of[key[0]])
                 for key in best if key in windows]
 
     def _meaning_ranking(self, query, video_id, available):

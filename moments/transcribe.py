@@ -23,13 +23,19 @@ class Transcript:
 def transcribe(path, pool=None, language=None, progress=None):
     """Timed words for the speech in an audio or video file. `language` is a code such as "ml", or None
     to let Whisper detect it from the first 30 seconds."""
+    language = languages.resolve(language)  # "Malayalam" -> "ml"; None or "auto" -> detect
+    own_pool = pool is None
     pool = pool or EnginePool()
-    audio = load_audio(path)
-    duration = len(audio) / SAMPLE_RATE
-    if language is None:
-        language, _ = pool.get("whisper").detect_language(audio)
-    else:
-        language = languages.resolve(language)
-    engine = pool.get(languages.engine_for(language))
-    result = engine.transcribe(audio, language, progress=progress)
-    return Transcript(language=language, duration=duration, engine=engine.label, words=result.words)
+    try:
+        audio = load_audio(path)
+        duration = len(audio) / SAMPLE_RATE
+        if language is None:
+            language, _ = pool.get("whisper").detect_language(audio)
+        engine = pool.get(languages.engine_for(language))
+        result = engine.transcribe(audio, language, progress=progress)
+        return Transcript(language=language, duration=duration, engine=engine.label, words=result.words)
+    finally:
+        # A pool made here is freed at once: the embedding model needs the GPU next, and 8 GB cannot
+        # hold both. A pool passed in (the web app's) stays loaded for the next file.
+        if own_pool:
+            pool.close()

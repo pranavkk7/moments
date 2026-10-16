@@ -1,0 +1,13 @@
+[project]
+name = "moments"
+version = "0.1.0"
+description = "Ask any video, in any language, and jump to the moment that answers"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[project.scripts]
+moments = "moments.cli:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

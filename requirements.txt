@@ -1,0 +1,8 @@
+# PolySub (speech recognition) is installed from its folder: pip install -e ../polysub
+# plus its own requirements (PyTorch with CUDA, qwen-asr, faster-whisper).
+qwen-asr==0.0.6
+faster-whisper>=1.2
+sentence-transformers>=5
+chromadb>=1.5
+rank-bm25
+numpy

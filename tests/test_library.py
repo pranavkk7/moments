@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from moments.library import LibraryError, script_of, tokens, video_id_for
+from moments.library import LibraryError, fold_accents, script_of, tokens, video_id_for
 
 from .conftest import transcript
 
@@ -174,3 +174,37 @@ def test_a_video_can_be_removed(library, media):
     assert path.exists()  # the original file is not touched
     with pytest.raises(LibraryError):
         library.remove(a)
+
+
+def test_accents_are_ignored_on_latin_letters_only():
+    assert fold_accents("¿Qué es un púlsar?") == "¿Que es un pulsar?"
+    assert fold_accents("परीक्षा") == "परीक्षा"  # Devanagari vowel signs are kept
+    assert tokens("Púlsar", "es") == ["pulsar"]
+
+
+def test_a_spanish_question_and_an_english_one_are_told_apart(library, media):
+    from polysub.cues import Word
+
+    talk = ["la estrella más cercana es alfa centauri"] * 20 + ["los púlsares giran muy rápido"] * 20
+    es = library.add(media("es.mp4", b"s"), transcript(talk, language="es"))
+    english = [Word(w, i * 0.5, i * 0.5 + 0.4) for i, w in enumerate(
+        ("the nearest star is alpha centauri " * 10 + "pulsars spin very fast " * 10).split())]
+    library.set_english(es, english)
+    meta = library.meta(es)
+    assert library.question_language("¿Cuál es la estrella más cercana?", meta) == "own"
+    assert library.question_language("Which star is the nearest?", meta) == "en"
+    # An English question gets no credit for words it happens to share with the Spanish transcript.
+    for h in library.search("Which star is the nearest?", video_id=es, k=5):
+        assert "keyword" not in h.ranks
+
+
+def test_search_falls_back_to_exact_ranking_when_the_index_is_not_readable(library, media, monkeypatch):
+    library.add(media("lecture.mp4"), transcript(["intro words here"] * 60 + ["the exam is in march"] * 3))
+
+    def unreadable(*args, **kwargs):
+        raise RuntimeError("Error creating hnsw segment reader: Nothing found on disk")
+
+    monkeypatch.setattr(type(library.collection), "query", unreadable)
+    monkeypatch.setattr(type(library.collection), "get", unreadable)  # ChromaDB can't read its own copy either
+    hit = library.search("when is the exam", k=1, rankings=("meaning",))[0]
+    assert "exam is in march" in hit.segment.text

@@ -560,6 +560,166 @@
      "answer": []
     }
    ]
+  },
+  {
+   "file": "es_las_estrellas.webm",
+   "questions": [
+    {
+     "question": "What is the most common kind of matter in the universe?",
+     "language": "en",
+     "answer": [
+      [
+       21.3,
+       30.0
+      ]
+     ]
+    },
+    {
+     "question": "At what point is a star said to be born?",
+     "language": "en",
+     "answer": [
+      [
+       68.7,
+       79.9
+      ]
+     ]
+    },
+    {
+     "question": "Which star is closest to our Sun?",
+     "language": "en",
+     "answer": [
+      [
+       120.0,
+       132.5
+      ]
+     ]
+    },
+    {
+     "question": "How long would it take to reach the nearest star at the speed of light?",
+     "language": "en",
+     "answer": [
+      [
+       133.2,
+       141.4
+      ]
+     ]
+    },
+    {
+     "question": "How many stars are there in the Milky Way?",
+     "language": "en",
+     "answer": [
+      [
+       146.7,
+       153.4
+      ]
+     ]
+    },
+    {
+     "question": "How many planets does the solar system have, according to the film?",
+     "language": "en",
+     "answer": [
+      [
+       238.6,
+       248.2
+      ]
+     ]
+    },
+    {
+     "question": "What will happen to the Sun when its hydrogen runs out?",
+     "language": "en",
+     "answer": [
+      [
+       294.9,
+       316.0
+      ]
+     ]
+    },
+    {
+     "question": "What is left behind after a supernova?",
+     "language": "en",
+     "answer": [
+      [
+       377.0,
+       384.0
+      ]
+     ]
+    },
+    {
+     "question": "How much would a teaspoon of neutron star matter weigh?",
+     "language": "en",
+     "answer": [
+      [
+       386.2,
+       389.5
+      ]
+     ]
+    },
+    {
+     "question": "What are pulsars?",
+     "language": "en",
+     "answer": [
+      [
+       391.2,
+       403.9
+      ]
+     ]
+    },
+    {
+     "question": "Why can't we see black holes, and how are they detected?",
+     "language": "en",
+     "answer": [
+      [
+       441.0,
+       456.6
+      ]
+     ]
+    },
+    {
+     "question": "What is the largest object in our solar system?",
+     "language": "en",
+     "answer": [
+      [
+       479.9,
+       492.7
+      ]
+     ]
+    },
+    {
+     "question": "¿Cuál es la estrella más cercana a nuestro sol?",
+     "language": "es",
+     "answer": [
+      [
+       120.0,
+       132.5
+      ]
+     ]
+    },
+    {
+     "question": "¿Qué es un púlsar?",
+     "language": "es",
+     "answer": [
+      [
+       391.2,
+       403.9
+      ]
+     ]
+    },
+    {
+     "question": "¿Cuántos planetas tiene nuestro sistema solar?",
+     "language": "es",
+     "answer": [
+      [
+       238.6,
+       248.2
+      ]
+     ]
+    },
+    {
+     "question": "Who discovered Alpha Centauri?",
+     "language": "en",
+     "answer": []
+    }
+   ]
   }
  ]
 }

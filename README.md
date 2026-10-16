@@ -36,30 +36,33 @@ question ──► hybrid search (meaning + keywords, language-aware) ──► 
    over both the original words and the English translation.
 5. **Search.** Up to four rankings are merged with reciprocal rank fusion: meaning and keywords in the
    video's language, and meaning and keywords in English. A keyword match only counts when the question
-   is written in the same script as the text it matched (measured below).
+   is in the same language as the text it matched, judged by which of the two texts more of its words
+   appear in (measured below). Keywords ignore accents on Latin letters, so "púlsar" finds "pulsar".
 6. **Answer (optional).** With an API key, an LLM sees only the numbered moments, replies in a fixed JSON
    schema, and the code checks that every cited moment is one it was actually given. This part is covered
    by unit tests; the results below measure search, which is what Moments does without a key.
 
 ## Results
 
-52 questions over 4 videos in 4 languages, each with the time range where the answer is spoken, read
+67 questions over 5 videos in 5 languages, each with the time range where the answer is spoken, read
 from the timed transcripts ([eval/questions.json](eval/questions.json)). A result counts when its window
 overlaps the answer by at least 3 seconds. `python -m moments.evaluate` reproduces the tables and
-`python eval/compare_rankings.py` the comparison below.
+`python eval/compare_rankings.py` the comparison of rankings.
 
 | Search | Right moment first | In the top 3 | MRR |
 |---|---|---|---|
-| **Moments (four rankings, language-aware)** | **87%** | **100%** | **0.93** |
-| Original language only (meaning + keywords) | 81% | 98% | 0.90 |
-| Meaning only (bge-m3) | 75% | 98% | 0.87 |
-| Keywords only (BM25) | 44% | 54% | 0.50 |
+| **Moments (four rankings, language-aware)** | **90%** | **100%** | **0.94** |
+| Original language only (meaning + keywords) | 85% | 99% | 0.92 |
+| Meaning only (bge-m3) | 81% | 99% | 0.90 |
+| Keywords only (BM25) | 42% | 52% | 0.48 |
 
 By group:
 
 | Video | Questions in | n | First | Top 3 |
 |---|---|---|---|---|
 | English | English | 12 | 92% | 100% |
+| Spanish | English | 12 | 100% | 100% |
+| Spanish | Spanish | 3 | 100% | 100% |
 | Japanese | English | 12 | 75% | 100% |
 | Japanese | Japanese | 4 | 100% | 100% |
 | Hindi | English | 8 | 75% | 100% |
@@ -67,19 +70,22 @@ By group:
 | Arabic | English | 10 | 90% | 100% |
 | Arabic | Arabic | 3 | 100% | 100% |
 
-What the numbers showed:
+What the numbers showed, in the order the changes were made:
 
 - **Keywords can't cross languages.** BM25 over the original words found 0% of the English-question
   moments in the Hindi and Arabic videos. Meaning-based search is what connects the languages.
 - **But keywords help within a language.** Adding them lifted Arabic-on-Arabic from 67% to 100% first
   place and Japanese-on-Japanese from 75% to 100%.
-- **Plain fusion hurt across languages,** so fusion became language-aware. English questions on the
-  Japanese video found the right moment first 50% of the time with plain fusion, 58% with keyword
-  matches limited to the same script.
-- **Searching the English translation too was the biggest gain.** For English questions on the Japanese,
-  Hindi and Arabic videos it lifted first place from 70% to 80% and put the right moment in the top 3
-  every time (from 97%); Japanese alone went from 58% to 75%. Same-language questions were unchanged,
-  and the translation alone would have been worse for them (45% first), so Moments keeps both.
+- **So keyword matches must stay within one language.** At first they counted whenever the question and
+  the transcript shared a script, which already helped (English questions on the Japanese video: 50% to
+  58% first). Spanish showed the flaw: it shares the Latin alphabet with English, so English questions
+  were keyword-matched against Spanish words, and the Spanish video scored 92% and 67% first for English
+  and Spanish questions while meaning alone scored 100%. Judging the question's language from which text
+  its words appear in fixed it: 100% for both.
+- **Searching the English translation too was the biggest single gain.** For English questions on the
+  four non-English videos it lifted first place from 79% to 86% and put the right moment in the top 3
+  every time; Japanese went from 58% to 75%. Same-language questions were unchanged, and the
+  translation alone would have been far worse for them (52% first), so Moments keeps both.
 
 Small test sets: treat differences of one or two questions as noise.
 
@@ -126,6 +132,7 @@ All from Wikimedia Commons, used under their licences:
 | [Reticulum Rex (in Japanese)](https://commons.wikimedia.org/wiki/File:Reticulum_Rex_(in_Japanese)_-_Creative_Commons..ogv), Creative Commons | Japanese | CC BY-SA 2.1 JP |
 | [About The Sengol](https://commons.wikimedia.org/wiki/File:About_The_Sengol,_About_its_History_and_Significance.webm) | Hindi | CC BY 3.0 |
 | [Ancient construction practices, Dura-Europos (Djuss)](https://commons.wikimedia.org/wiki/File:Ancient_construction_practices_Dura-Europos_(Djuss).webm) | Arabic | CC BY-SA 4.0 |
+| ["Las estrellas"](https://commons.wikimedia.org/wiki/File:%22Las_estrellas%22_(Worldnet_TV)..webm), Worldnet TV documentary | Spanish | Public domain |
 
 The files themselves are not in the repository (`samples/` is ignored); [eval/samples.json](eval/samples.json) lists
 where each came from.

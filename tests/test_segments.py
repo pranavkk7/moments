@@ -1,6 +1,6 @@
 from polysub.cues import Word
 
-from moments.segments import build_segments, format_time
+from moments.segments import Segment, attach_english, build_segments, format_time
 
 from .conftest import words_from
 
@@ -45,3 +45,11 @@ def test_format_time():
     assert format_time(5) == "0:05"
     assert format_time(754.9) == "12:34"
     assert format_time(3725) == "1:02:05"
+
+
+def test_english_words_are_attached_to_the_windows_they_were_spoken_in():
+    segments = [Segment(0, 0.0, 40.0, "..."), Segment(1, 30.0, 70.0, "...")]
+    words = [Word("Hello", 1.0, 1.4), Word("there.", 1.5, 2.0), Word("Exam", 35.0, 35.5), Word("soon.", 50.0, 50.4)]
+    attach_english(segments, words)
+    assert segments[0].english == "Hello there. Exam"  # 35 s is inside both overlapping windows
+    assert segments[1].english == "Exam soon."

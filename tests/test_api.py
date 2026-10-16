@@ -122,8 +122,20 @@ def test_answers_are_off_without_a_key_or_when_switched_off(monkeypatch):
     from moments.api import answers_enabled
 
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("MOMENTS_ANSWERS", raising=False)  # a developer's own .env may set it
     assert not answers_enabled()
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     assert answers_enabled()
     monkeypatch.setenv("MOMENTS_ANSWERS", "off")
     assert not answers_enabled()
+
+
+def test_moments_carry_their_english_translation(library, media):
+    from polysub.cues import Word
+
+    ja = library.add(media("ja.mp4", b"j"), transcript(["MIT の 講義 です"] * 20, language="ja"))
+    library.set_english(ja, [Word("A", 1.0, 1.2), Word("lecture", 1.3, 1.8), Word("at", 1.9, 2.0), Word("MIT.", 2.1, 2.5)])
+    client = TestClient(create_app(library=library, answers=False, demo=True))
+    body = client.post("/api/ask", json={"question": "MIT lecture", "video_id": ja}).json()
+    assert body["citations"][0]["english"] == "A lecture at MIT."
+    assert "MIT" in body["citations"][0]["text"]

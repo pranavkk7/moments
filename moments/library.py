@@ -24,8 +24,8 @@ from polysub import languages
 from polysub.audio import AudioError
 
 from .embed import Embedder
-from .segments import Segment, build_segments
-from .transcribe import transcribe
+from .segments import Segment, attach_english, build_segments
+from .transcribe import transcribe, translate
 
 RRF_K = 60  # the usual constant: damps the gap between rank 1 and rank 2
 CANDIDATES = 30  # how many windows each method contributes before fusion
@@ -36,6 +36,10 @@ CROSS_SCRIPT_KEYWORD_WEIGHT = 0.0
 # Languages whose keyword search matches 3-letter pieces of words instead of whole words. Only Malayalam
 # is measured; Tamil, Telugu and Kannada join words the same way and would likely gain too.
 PIECE_LANGUAGES = {"ml"}
+# The rankings search can fuse: meaning and keywords in the video's own language, and the same two over
+# the English translation of videos in other languages.
+RANKINGS = ("meaning", "keyword", "meaning_en", "keyword_en")
+MODES = {"hybrid": RANKINGS, "meaning": ("meaning",), "keyword": ("keyword",)}
 
 
 class LibraryError(Exception):
@@ -50,6 +54,7 @@ class Hit:
     meaning_rank: int = None  # 1-based rank in the dense list, None if absent
     keyword_rank: int = None
     language: str = ""
+    ranks: dict = None  # 1-based rank in every ranking that found this window
 
 
 def video_id_for(path):
@@ -95,6 +100,7 @@ class Library:
         self.root = Path(root)
         self.embedder = embedder or Embedder()
         self._collection = None
+        self._english = None
         self._scripts = {}  # video id -> writing system of its transcript
 
     # ---------- storage ----------
@@ -102,19 +108,28 @@ class Library:
     def _dir(self, video_id):
         return self.root / "videos" / video_id
 
+    def _open(self, prefix):
+        import chromadb
+        from chromadb.config import Settings
+
+        client = chromadb.PersistentClient(path=str(self.root / "index"), settings=Settings(anonymized_telemetry=False))
+        name = prefix + re.sub(r"[^a-zA-Z0-9._-]+", "-", self.embedder.name)[:50]
+        # We always pass our own vectors, so Chroma must not load an embedding model of its own.
+        return client.get_or_create_collection(name=name, metadata={"hnsw:space": "cosine"}, embedding_function=None)
+
     @property
     def collection(self):
+        """Vectors of the windows in the video's own language."""
         if self._collection is None:
-            import chromadb
-            from chromadb.config import Settings
-
-            client = chromadb.PersistentClient(path=str(self.root / "index"),
-                                               settings=Settings(anonymized_telemetry=False))
-            name = "segments-" + re.sub(r"[^a-zA-Z0-9._-]+", "-", self.embedder.name)[:50]
-            # We always pass our own vectors, so Chroma must not load an embedding model of its own.
-            self._collection = client.get_or_create_collection(
-                name=name, metadata={"hnsw:space": "cosine"}, embedding_function=None)
+            self._collection = self._open("segments-")
         return self._collection
+
+    @property
+    def english(self):
+        """Vectors of the windows' English translations (videos in other languages only)."""
+        if self._english is None:
+            self._english = self._open("english-")
+        return self._english
 
     def videos(self):
         folder = self.root / "videos"
@@ -148,17 +163,55 @@ class Library:
 
     # ---------- adding videos ----------
 
-    def ingest(self, path, pool=None, language=None, title=None, progress=None, engine_name=None):
-        """Transcribes a file and adds it. Returns the video id. `engine_name` overrides the engine
-        chosen for the language (used to compare engines)."""
+    def ingest(self, path, pool=None, language=None, title=None, progress=None, engine_name=None,
+               on_stage=None, english=True):
+        """Transcribes a file and adds it, then translates it into English when it is in another
+        language. Returns the video id. `engine_name` overrides the engine chosen for the language
+        (used to compare engines); `on_stage` hears "transcribing" and "translating"."""
         path = Path(path)
         if not path.exists():
             raise LibraryError(f"File not found: {path}")
+        if on_stage:
+            on_stage("transcribing")
         try:
             transcript = transcribe(path, pool=pool, language=language, progress=progress, engine_name=engine_name)
         except (ValueError, AudioError) as error:  # an unknown language, or a file FFmpeg cannot read
             raise LibraryError(str(error)) from error
-        return self.add(path, transcript, title=title)
+        video_id = self.add(path, transcript, title=title)
+        if english and transcript.language != "en":
+            if on_stage:
+                on_stage("translating")
+            self.translate(video_id, pool=pool, progress=progress)
+        return video_id
+
+    def translate(self, video_id, pool=None, progress=None):
+        """Adds an English translation to every window of a video in another language, and indexes it.
+        Shown beside the original so a viewer can read what was said, and searched as well."""
+        meta = self.meta(video_id)
+        if meta["language"] == "en":
+            return False
+        words = translate(meta["source"], meta["language"], pool=pool, progress=progress)
+        self.set_english(video_id, words)
+        return True
+
+    def set_english(self, video_id, words):
+        segments = attach_english(self.segments(video_id), words)
+        folder = self._dir(video_id)
+        (folder / "transcript_en.json").write_text(
+            json.dumps([{"text": w.text, "start": w.start, "end": w.end} for w in words], ensure_ascii=False), "utf-8")
+        (folder / "segments.json").write_text(
+            json.dumps([s.to_dict() for s in segments], ensure_ascii=False, indent=1), "utf-8")
+        self.update_meta(video_id, english=True)
+        self.english.delete(where={"video_id": video_id})
+        translated = [s for s in segments if s.english]
+        if translated:
+            self.english.add(
+                ids=[f"{video_id}:{s.index}" for s in translated],
+                embeddings=self.embedder.passages([s.english for s in translated]).tolist(),
+                documents=[s.english for s in translated],
+                metadatas=[{"video_id": video_id, "index": s.index, "start": s.start, "end": s.end}
+                           for s in translated],
+            )
 
     def add(self, path, transcript, title=None):
         path = Path(path)
@@ -179,8 +232,10 @@ class Library:
         (folder / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), "utf-8")
 
         self._scripts.pop(video_id, None)
-        # Re-adding a video replaces its windows rather than duplicating them.
+        # Re-adding a video replaces its windows rather than duplicating them; a new transcript also
+        # makes any earlier translation stale.
         self.collection.delete(where={"video_id": video_id})
+        self.english.delete(where={"video_id": video_id})
         self.collection.add(
             ids=[f"{video_id}:{s.index}" for s in segments],
             embeddings=self.embedder.passages([s.text for s in segments]).tolist(),
@@ -192,11 +247,13 @@ class Library:
 
     # ---------- search ----------
 
-    def search(self, query, video_id=None, k=5, mode="hybrid"):
+    def search(self, query, video_id=None, k=5, mode="hybrid", rankings=None):
         """The k best windows for a question. `mode` is "hybrid" (the default), or "meaning" / "keyword" to
-        use one ranking alone, which is how the evaluation measures what each contributes."""
-        if mode not in ("hybrid", "meaning", "keyword"):
+        use one ranking alone; `rankings` picks any set of RANKINGS, which is how the evaluation measures
+        what each contributes."""
+        if mode not in MODES:
             raise ValueError(f"Unknown search mode: {mode}")
+        rankings = tuple(rankings or MODES[mode])
         query = (query or "").strip()
         if not query:
             raise LibraryError("Type a question first.")
@@ -205,28 +262,48 @@ class Library:
             raise LibraryError("The library is empty. Add a video first.")
         windows = {(m["id"], s.index): s for m in targets for s in self.segments(m["id"])}
 
-        meaning = self._meaning_ranking(query, video_id, len(windows)) if mode != "keyword" else []
-        keyword = self._keyword_ranking(query, targets, windows) if mode != "meaning" else []
-
         question_script = script_of(query)
-        keyword_weight = {m["id"]: 1.0 if mode == "keyword" or self.script(m["id"]) == question_script
-                          else CROSS_SCRIPT_KEYWORD_WEIGHT for m in targets}
+        only_one = len(rankings) == 1
+        lists, weights = {}, {}
+        if "meaning" in rankings:
+            lists["meaning"] = self._meaning_ranking(self.collection, query, video_id, len(windows))
+            weights["meaning"] = lambda vid: 1.0
+        if "keyword" in rankings:
+            lists["keyword"] = self._keyword_ranking(query, targets, windows)
+            weights["keyword"] = lambda vid: 1.0 if only_one or self.script(vid) == question_script \
+                else CROSS_SCRIPT_KEYWORD_WEIGHT
+        translated = [m for m in targets if m.get("english")]
+        if translated and "meaning_en" in rankings:
+            lists["meaning_en"] = self._meaning_ranking(self.english, query, video_id, len(windows))
+            weights["meaning_en"] = lambda vid: 1.0
+        if translated and "keyword_en" in rankings:
+            english = {key: Segment(s.index, s.start, s.end, s.english) for key, s in windows.items()
+                       if s.english}
+            lists["keyword_en"] = self._keyword_ranking(query, [{**m, "language": "en"} for m in translated], english)
+            # An English keyword match only means something for a question written in English letters.
+            weights["keyword_en"] = lambda vid: 1.0 if only_one or question_script == "LATIN" else 0.0
+
         scores = {}
-        for rank, key in enumerate(meaning, start=1):
-            scores[key] = scores.get(key, 0.0) + 1.0 / (RRF_K + rank)
-        for rank, key in enumerate(keyword, start=1):
-            if keyword_weight[key[0]]:
-                scores[key] = scores.get(key, 0.0) + keyword_weight[key[0]] / (RRF_K + rank)
+        for name, ranking in lists.items():
+            for rank, key in enumerate(ranking, start=1):
+                weight = weights[name](key[0])
+                if weight and key in windows:
+                    scores[key] = scores.get(key, 0.0) + weight / (RRF_K + rank)
         best = sorted(scores, key=scores.get, reverse=True)[:k]
         language_of = {m["id"]: m["language"] for m in targets}
-        return [Hit(key[0], windows[key], round(scores[key], 5),
-                    meaning.index(key) + 1 if key in meaning else None,
-                    keyword.index(key) + 1 if key in keyword else None,
-                    language_of[key[0]])
-                for key in best if key in windows]
 
-    def _meaning_ranking(self, query, video_id, available):
-        result = self.collection.query(
+        def rank_in(name, key):
+            ranking = lists.get(name, [])
+            return ranking.index(key) + 1 if key in ranking else None
+
+        return [Hit(key[0], windows[key], round(scores[key], 5), rank_in("meaning", key), rank_in("keyword", key),
+                    language_of[key[0]], {name: rank_in(name, key) for name in lists if rank_in(name, key)})
+                for key in best]
+
+    def _meaning_ranking(self, collection, query, video_id, available):
+        if collection.count() == 0:
+            return []
+        result = collection.query(
             query_embeddings=[self.embedder.query(query).tolist()],
             n_results=max(1, min(CANDIDATES, available)),
             where={"video_id": video_id} if video_id else None,

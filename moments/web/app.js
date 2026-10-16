@@ -89,7 +89,10 @@ function drawMarks() {
 function jump(citation) {
   play(citation.video_id, citation.start)
   $('[data-now-time]').textContent = `${citation.title} · ${formatTime(citation.start)}–${formatTime(citation.end)}`
-  $('[data-now-text]').textContent = citation.text
+  $('[data-now-text]').textContent = citation.english || citation.text
+  const original = $('[data-now-original]')
+  original.textContent = citation.english ? citation.text : ''
+  original.hidden = !citation.english
   now.hidden = false
 }
 
@@ -150,7 +153,12 @@ function showAnswer(body) {
       button.innerHTML = '<span class="cite-time"></span><span class="cite-title"></span><span class="cite-text"></span>'
       $('.cite-time', button).textContent = `${c.number}  ${formatTime(c.start)}`
       $('.cite-title', button).textContent = c.title
-      $('.cite-text', button).textContent = c.text
+      // English first when the video is in another language; the original words stay underneath.
+      $('.cite-text', button).textContent = c.english || c.text
+      if (c.english) {
+        const original = Object.assign(document.createElement('span'), { className: 'cite-original', textContent: c.text })
+        button.append(original)
+      }
       button.addEventListener('click', () => jump(c))
       item.append(button)
       list.append(item)
@@ -183,6 +191,7 @@ form.addEventListener('submit', async (event) => {
       meter.style.width = `${Math.round(job.progress * 100)}%`
       if (job.status === 'queued') status.textContent = 'Waiting for the previous video to finish…'
       if (job.status === 'transcribing') status.textContent = `Transcribing… ${Math.round(job.progress * 100)}%`
+      if (job.status === 'translating') status.textContent = `Translating into English… ${Math.round(job.progress * 100)}%`
       if (job.status === 'failed') throw new Error(job.error)
       if (job.status === 'done') {
         status.textContent = 'Done. You can ask it questions now.'

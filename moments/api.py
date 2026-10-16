@@ -79,7 +79,8 @@ class Jobs:
 
                     self.pool = EnginePool(factories=FACTORIES)
                 video_id = self.library.ingest(path, pool=self.pool, language=language, title=title,
-                                               progress=lambda f: self._update(job_id, progress=round(f, 3)))
+                                               progress=lambda f: self._update(job_id, progress=round(f, 3)),
+                                               on_stage=lambda stage: self._update(job_id, status=stage, progress=0.0))
                 self._update(job_id, status="done", progress=1.0, video_id=video_id)
             except LibraryError as error:
                 self._update(job_id, status="failed", error=str(error))
@@ -150,11 +151,12 @@ def create_app(library=None, jobs=None, llm=None, demo=None, answers=None):
         except LibraryError as error:
             raise HTTPException(400, str(error)) from error
 
-        def cite(video_id, start, end, text):
+        def cite(video_id, start, end, text, english=""):
             return {"video_id": video_id, "title": titles.get(video_id, video_id), "start": start, "end": end,
-                    "text": text}
+                    "text": text, "english": english}
 
-        moments = [cite(h.video_id, h.segment.start, h.segment.end, h.segment.text) for h in hits[:3]]
+        moments = [cite(h.video_id, h.segment.start, h.segment.end, h.segment.text, h.segment.english)
+                   for h in hits[:3]]
         if not answers:
             return {"answer": "", "found": bool(moments), "written": False, "citations": moments}
 
@@ -167,7 +169,7 @@ def create_app(library=None, jobs=None, llm=None, demo=None, answers=None):
             return {"answer": "A written answer isn't available right now. These are the closest moments:",
                     "found": False, "written": False, "citations": moments}
         return {"answer": result.text, "found": result.found, "written": True,
-                "citations": [cite(c.video_id, c.start, c.end, c.text) for c in result.citations]}
+                "citations": [cite(c.video_id, c.start, c.end, c.text, c.english) for c in result.citations]}
 
     @app.get("/media/{video_id}")
     def media(video_id: str):

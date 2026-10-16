@@ -117,3 +117,50 @@ def test_keywords_do_not_count_across_scripts(library, media):
         assert h.score == pytest.approx(1 / (60 + h.meaning_rank), abs=1e-5)
     same_script = library.search("MIT", video_id=ja, k=5, mode="keyword")
     assert same_script and "MIT" in same_script[0].segment.text
+
+
+def test_translations_are_shown_and_searched(library, media):
+    from polysub.cues import Word
+
+    talk = ["今日 は 土 の 話 を します"] * 40 + ["MIT の 講義 です"] * 3 + ["水 と 粘土 の 話"] * 40
+    spoken = transcript(talk, language="ja")
+    ja = library.add(media("ja.mp4", b"j"), spoken)
+    said = next(w.start for w in spoken.words if w.text == "MIT")  # when "MIT" is first spoken
+    english = [Word("talk", 1.0, 1.5), Word("about", 1.6, 2.0), Word("soil.", 2.1, 2.5),
+               Word("A", said, said + 0.2), Word("lecture", said + 0.3, said + 0.8),
+               Word("at", said + 0.9, said + 1.0), Word("MIT.", said + 1.1, said + 1.5)]
+    library.set_english(ja, english)
+    assert library.meta(ja)["english"] is True
+    assert any("lecture at MIT." in s.english for s in library.segments(ja))
+    # The stand-in embedder cannot read joined-up Japanese, so check the translation rankings on their own.
+    hit = library.search("Which MIT lecture?", video_id=ja, k=1, rankings=("meaning_en", "keyword_en"))[0]
+    assert "MIT" in hit.segment.text and "MIT" in hit.segment.english
+    assert set(hit.ranks) & {"meaning_en", "keyword_en"}  # found through the translation
+    original_only = library.search("Which MIT lecture?", video_id=ja, k=5, rankings=("meaning", "keyword"))
+    assert all(set(h.ranks) <= {"meaning", "keyword"} for h in original_only)
+
+
+def test_re_adding_a_video_drops_its_old_translation(library, media):
+    from polysub.cues import Word
+
+    path = media("ja.mp4", b"j")
+    ja = library.add(path, transcript(["土 の 話"] * 30, language="ja"))
+    library.set_english(ja, [Word("soil", 1.0, 1.5)])
+    assert library.english.count() > 0
+    library.add(path, transcript(["土 の 話"] * 30, language="ja"))
+    assert library.english.count() == 0 and "english" not in library.meta(ja)
+
+
+def test_ingest_translates_videos_in_other_languages(library, media, monkeypatch):
+    from polysub.cues import Word
+
+    monkeypatch.setattr("moments.library.transcribe", lambda path, **kw: transcript(["土 の 話"] * 30, language="ja"))
+    monkeypatch.setattr("moments.library.translate", lambda path, language, **kw: [Word("soil", 1.0, 1.5)])
+    stages = []
+    ja = library.ingest(media("ja.mp4", b"j"), on_stage=stages.append)
+    assert stages == ["transcribing", "translating"]
+    assert library.segments(ja)[0].english == "soil"
+    monkeypatch.setattr("moments.library.transcribe", lambda path, **kw: transcript(["about soil"] * 30))
+    stages.clear()
+    library.ingest(media("en.mp4", b"e"), on_stage=stages.append)
+    assert stages == ["transcribing"]  # nothing to translate

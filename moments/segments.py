@@ -21,6 +21,7 @@ class Segment:
     start: float
     end: float
     text: str
+    english: str = ""  # the same stretch in English, for videos in other languages (see Library.translate)
 
     def to_dict(self):
         return asdict(self)
@@ -52,6 +53,16 @@ def build_segments(words, language, target=TARGET_SECONDS, longest=MAX_SECONDS,
         resume = words[cut].end - overlap
         nxt = next((k for k in range(first + 1, cut + 1) if words[k].start >= resume), cut + 1)
         first = max(nxt, first + 1)
+    return segments
+
+
+def attach_english(segments, english_words):
+    """Gives each window the English words spoken in it: those whose midpoint falls inside the window.
+    Whisper translates speech into English with its own timing, so the two transcripts line up by time,
+    not word for word."""
+    for segment in segments:
+        inside = [w for w in english_words if segment.start <= (w.start + w.end) / 2 <= segment.end]
+        segment.english = join_words(inside, "en")
     return segments
 
 

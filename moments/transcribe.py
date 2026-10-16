@@ -62,6 +62,21 @@ class Transcript:
     script_repaired: bool = False  # letters were moved into the language's own script
 
 
+def translate(path, language, pool=None, progress=None):
+    """English words with their timings, translated from speech by Whisper (task "translate"), on the
+    GPU and without any API. Uses the language's own Whisper version when it has one (large-v2 for
+    Malayalam)."""
+    own_pool = pool is None
+    pool = pool or EnginePool(factories=FACTORIES)
+    try:
+        audio = load_audio(path)
+        name = "whisper-v2" if ENGINE_FOR.get(language) == "whisper-v2" else "whisper"
+        return pool.get(name).transcribe(audio, language, progress=progress, task="translate").words
+    finally:
+        if own_pool:
+            pool.close()
+
+
 def transcribe(path, pool=None, language=None, progress=None, engine_name=None):
     """Timed words for the speech in an audio or video file. `language` is a code such as "ml", or None
     to let Whisper detect it from the first 30 seconds."""

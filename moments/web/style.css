@@ -150,6 +150,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .now-time { margin: 0 0 4px; font: 500 13px/1 var(--mono); color: var(--muted); }
 .now-text { margin: 0; max-width: 70ch; }
+.now-original { margin: 10px 0 0; max-width: 70ch; font-size: 14px; color: var(--muted); }
 
 /* ---------- ask ---------- */
 
@@ -226,6 +227,16 @@ textarea { resize: vertical; min-height: 84px; }
 }
 
 .cite-title { font-size: 13px; font-weight: 500; color: var(--muted); }
+.cite-original {
+  grid-column: 2;
+  font-size: 12px;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .cite-text {
   font-size: 14px;
   display: -webkit-box;

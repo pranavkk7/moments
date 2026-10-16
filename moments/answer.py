@@ -54,6 +54,7 @@ class Citation:
     start: float
     end: float
     text: str
+    english: str = ""
 
 
 @dataclass
@@ -72,6 +73,8 @@ def build_prompt(question, hits, titles):
         language = languages.name(hit.language) if hit.language else ""
         lines.append(f"[{number}] {title}, {format_time(s.start)}-{format_time(s.end)}"
                      f"{f' ({language})' if language else ''}: {s.text}")
+        if s.english:
+            lines.append(f"    English translation: {s.english}")
     return "\n".join(lines)
 
 
@@ -89,7 +92,7 @@ def answer(question, hits, titles, llm=None):
         if isinstance(number, int) and 1 <= number <= len(hits) and number not in cited:
             cited.append(number)
     citations = [Citation(hits[n - 1].video_id, hits[n - 1].segment.start, hits[n - 1].segment.end,
-                          hits[n - 1].segment.text) for n in cited] if found else []
+                          hits[n - 1].segment.text, hits[n - 1].segment.english) for n in cited] if found else []
     return Answer(text or "The video does not seem to cover that.", found=found and bool(citations),
                   citations=citations, model=llm.label)
 

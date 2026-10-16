@@ -42,11 +42,16 @@ def main(argv=None, library=None, pool=None, llm=None, out=sys.stdout):
     library = library or Library(args.data)
     try:
         if args.command == "add":
+            stage = {"name": "Transcribing"}
+
             def progress(fraction):
-                print(f"\rTranscribing... {fraction:.0%}", end="", file=out, flush=True)
+                print(f"\r{stage['name']}... {fraction:.0%}", end="", file=out, flush=True)
+
+            def on_stage(name):
+                stage["name"] = name.capitalize()
 
             video_id = library.ingest(args.file, pool=pool, language=args.language, title=args.title,
-                                      progress=progress)
+                                      progress=progress, on_stage=on_stage)
             meta = library.meta(video_id)
             print(f"\nAdded {meta['title']} ({meta['language']}, {format_time(meta['duration'])}, "
                   f"{meta['segments']} moments) as {video_id}", file=out)
@@ -62,7 +67,10 @@ def main(argv=None, library=None, pool=None, llm=None, out=sys.stdout):
                 s = hit.segment
                 print(f"{titles.get(hit.video_id, hit.video_id)}  {format_time(s.start)}-{format_time(s.end)}",
                       file=out)
-                print(f"  {s.text[:300]}{'...' if len(s.text) > 300 else ''}\n", file=out)
+                print(f"  {s.text[:300]}{'...' if len(s.text) > 300 else ''}", file=out)
+                if s.english:
+                    print(f"  English: {s.english[:300]}{'...' if len(s.english) > 300 else ''}", file=out)
+                print(file=out)
         elif args.command == "ask":
             titles = {m["id"]: m["title"] for m in library.videos()}
             hits = library.search(args.question, video_id=args.video, k=args.k)

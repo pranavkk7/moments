@@ -15,7 +15,7 @@ COMBOS = {
 }
 
 library = Library(sys.argv[1] if len(sys.argv) > 1 else "data")
-cases = [c for c in load_cases("eval/questions.json", library) if c["ranges"]]
+cases = [c for c in load_cases("eval/questions.json", library) if c["ranges"] or c["pages"]]
 groups = {"all": lambda c: True,
           "English questions, other-language videos": lambda c: c["question_language"] == "en" and c["video_language"] != "en",
           "same-language questions": lambda c: c["question_language"] == c["video_language"]}
@@ -24,7 +24,7 @@ for name, rankings in COMBOS.items():
     ranks = {}
     for case in cases:
         hits = library.search(case["question"], video_id=case["video_id"], k=5, rankings=rankings)
-        ranks[id(case)] = first_hit_rank(hits, case["ranges"])
+        ranks[id(case)] = first_hit_rank(hits, case["ranges"], case["pages"])
     for group, keep in groups.items():
         s = summarise([ranks[id(c)] for c in cases if keep(c)])
         print(f"| {name} | {group} | {s['questions']} | {s['hit@1']:.0%} | {s['hit@3']:.0%} | {s['mrr']:.2f} |")

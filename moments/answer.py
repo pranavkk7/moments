@@ -20,9 +20,9 @@ from .segments import format_time
 DEFAULT_MODEL = os.environ.get("MOMENTS_LLM_MODEL", "claude-opus-5-5")
 DEFAULT_EFFORT = os.environ.get("MOMENTS_LLM_EFFORT", "low")  # short grounded answers need little thinking
 
-SYSTEM_PROMPT = """You answer questions about videos using only the numbered moments given to you. Each \
-moment is a short stretch of the video's transcript with its start time; transcripts can be in any \
-language and may contain recognition errors.
+SYSTEM_PROMPT = """You answer questions about videos and documents using only the numbered moments given \
+to you. Each moment is a short stretch of a video's transcript with its time, or a passage of a document \
+with its page; they can be in any language, and transcripts may contain recognition errors.
 
 - Answer in the language of the question, in at most 120 words, as plain text.
 - Use only what the moments say. Do not add facts from general knowledge.
@@ -55,6 +55,8 @@ class Citation:
     end: float
     text: str
     english: str = ""
+    page: int = None  # documents: the page of the passage
+    part: int = None  # documents without pages: the passage's number
 
 
 @dataclass
@@ -71,8 +73,9 @@ def build_prompt(question, hits, titles):
         s = hit.segment
         title = titles.get(hit.video_id, hit.video_id)
         language = languages.name(hit.language) if hit.language else ""
-        lines.append(f"[{number}] {title}, {format_time(s.start)}-{format_time(s.end)}"
-                     f"{f' ({language})' if language else ''}: {s.text}")
+        where = f"page {s.page}" if s.page else (f"passage {s.index + 1}" if s.start == s.end == 0 else
+                                                     f"{format_time(s.start)}-{format_time(s.end)}")
+        lines.append(f"[{number}] {title}, {where}{f' ({language})' if language else ''}: {s.text}")
         if s.english:
             lines.append(f"    English translation: {s.english}")
     return "\n".join(lines)
@@ -91,8 +94,11 @@ def answer(question, hits, titles, llm=None):
     for number in reply.get("moments", []):
         if isinstance(number, int) and 1 <= number <= len(hits) and number not in cited:
             cited.append(number)
-    citations = [Citation(hits[n - 1].video_id, hits[n - 1].segment.start, hits[n - 1].segment.end,
-                          hits[n - 1].segment.text, hits[n - 1].segment.english) for n in cited] if found else []
+    def citation(hit):
+        s = hit.segment
+        return Citation(hit.video_id, s.start, s.end, s.text, s.english, s.page, s.index + 1)
+
+    citations = [citation(hits[n - 1]) for n in cited] if found else []
     return Answer(text or "The video does not seem to cover that.", found=found and bool(citations),
                   citations=citations, model=llm.label)
 

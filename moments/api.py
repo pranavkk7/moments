@@ -1,4 +1,5 @@
-"""The web API and page: upload a video, follow its transcription, ask questions, play the moments.
+"""The web API and page: upload videos and documents, follow their processing, ask questions, and open
+the moments (a video at a timestamp, a PDF at a page).
 
     uvicorn moments.api:app --port 8000
 
@@ -37,7 +38,9 @@ WEB = Path(__file__).parent / "web"
 MAX_UPLOAD_BYTES = 2 * 1024**3  # 2 GB
 MEDIA_TYPES = {".mp4": "video/mp4", ".webm": "video/webm", ".ogv": "video/ogg", ".mkv": "video/x-matroska",
                ".mov": "video/quicktime", ".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".wav": "audio/wav",
-               ".ogg": "audio/ogg", ".opus": "audio/ogg", ".flac": "audio/flac"}
+               ".ogg": "audio/ogg", ".opus": "audio/ogg", ".flac": "audio/flac",
+               ".pdf": "application/pdf", ".txt": "text/plain; charset=utf-8", ".md": "text/plain; charset=utf-8",
+               ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
 
 
 class Jobs:
@@ -109,17 +112,17 @@ def create_app(library=None, jobs=None, llm=None, demo=None, answers=None):
     def config():
         return {"uploads": not demo, "answers": answers}
 
-    @app.get("/api/videos")
+    @app.get("/api/items")
     def videos():
-        return library.videos()
+        return library.items()
 
-    @app.post("/api/videos", status_code=202)
+    @app.post("/api/items", status_code=202)
     def upload(file: UploadFile = File(...), language: str = Form(""), title: str = Form("")):
         if demo:
             raise HTTPException(403, "Uploads are turned off in this demo. Try the sample videos.")
         suffix = Path(file.filename or "").suffix.lower()
         if suffix not in MEDIA_TYPES:
-            raise HTTPException(400, "That file type isn't supported. Upload a video or audio file.")
+            raise HTTPException(400, "That file type isn't supported. Upload a video, audio, PDF, Word or text file.")
         uploads.mkdir(parents=True, exist_ok=True)
         path = uploads / f"{uuid.uuid4().hex[:8]}-{Path(file.filename).name}"
         with open(path, "wb") as out:
@@ -136,7 +139,7 @@ def create_app(library=None, jobs=None, llm=None, demo=None, answers=None):
             raise HTTPException(404, "No such job.")
         return state
 
-    @app.get("/api/videos/{video_id}/segments")
+    @app.get("/api/items/{video_id}/segments")
     def segments(video_id: str):
         try:
             return [s.to_dict() for s in library.segments(library.meta(video_id)["id"])]
@@ -146,17 +149,19 @@ def create_app(library=None, jobs=None, llm=None, demo=None, answers=None):
     @app.post("/api/ask")
     def ask(body: Question):
         try:
-            titles = {m["id"]: m["title"] for m in library.videos()}
+            titles = {m["id"]: m["title"] for m in library.items()}
             hits = library.search(body.question, video_id=body.video_id, k=6)
         except LibraryError as error:
             raise HTTPException(400, str(error)) from error
 
-        def cite(video_id, start, end, text, english=""):
-            return {"video_id": video_id, "title": titles.get(video_id, video_id), "start": start, "end": end,
-                    "text": text, "english": english}
+        kinds = {m["id"]: m.get("kind", "video") for m in library.items()}
 
-        moments = [cite(h.video_id, h.segment.start, h.segment.end, h.segment.text, h.segment.english)
-                   for h in hits[:3]]
+        def cite(video_id, start, end, text, english="", page=None, part=None):
+            return {"video_id": video_id, "title": titles.get(video_id, video_id), "kind": kinds.get(video_id, "video"),
+                    "start": start, "end": end, "page": page, "part": part, "text": text, "english": english}
+
+        moments = [cite(h.video_id, h.segment.start, h.segment.end, h.segment.text, h.segment.english,
+                        h.segment.page, h.segment.index + 1) for h in hits[:3]]
         if not answers:
             return {"answer": "", "found": bool(moments), "written": False, "citations": moments}
 
@@ -169,7 +174,8 @@ def create_app(library=None, jobs=None, llm=None, demo=None, answers=None):
             return {"answer": "A written answer isn't available right now. These are the closest moments:",
                     "found": False, "written": False, "citations": moments}
         return {"answer": result.text, "found": result.found, "written": True,
-                "citations": [cite(c.video_id, c.start, c.end, c.text, c.english) for c in result.citations]}
+                "citations": [cite(c.video_id, c.start, c.end, c.text, c.english, c.page, c.part)
+                              for c in result.citations]}
 
     @app.get("/media/{video_id}")
     def media(video_id: str):

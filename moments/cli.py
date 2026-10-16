@@ -18,7 +18,7 @@ def parse_args(argv=None):
     parser.add_argument("--data", default="data", help="library folder (default: data)")
     commands = parser.add_subparsers(dest="command", required=True)
 
-    add = commands.add_parser("add", help="transcribe a video or audio file and add it to the library")
+    add = commands.add_parser("add", help="add a video, audio, PDF, Word or text file to the library")
     add.add_argument("file")
     add.add_argument("--language", help="spoken language, e.g. hi or Hindi (default: detect)")
     add.add_argument("--title")
@@ -53,32 +53,36 @@ def main(argv=None, library=None, pool=None, llm=None, out=sys.stdout):
             video_id = library.ingest(args.file, pool=pool, language=args.language, title=args.title,
                                       progress=progress, on_stage=on_stage)
             meta = library.meta(video_id)
-            print(f"\nAdded {meta['title']} ({meta['language']}, {format_time(meta['duration'])}, "
-                  f"{meta['segments']} moments) as {video_id}", file=out)
+            size = (f"{meta['pages']} pages" if meta.get("pages") else meta.get("format", "text")) \
+                if meta.get("kind") == "document" else format_time(meta["duration"])
+            print(f"\nAdded {meta['title']} ({meta['language']}, {size}, {meta['segments']} moments) as {video_id}",
+                  file=out)
         elif args.command == "list":
-            videos = library.videos()
+            videos = library.items()
             if not videos:
                 print("The library is empty. Add a video with: python -m moments add FILE", file=out)
             for m in videos:
-                print(f"{m['id']}  {m['title']}  [{m['language']}, {format_time(m['duration'])}]", file=out)
+                size = m.get("format", "").upper() if m.get("kind") == "document" else format_time(m["duration"])
+                print(f"{m['id']}  {m['title']}  [{m['language']}, {size}]", file=out)
         elif args.command == "search":
-            titles = {m["id"]: m["title"] for m in library.videos()}
+            titles = {m["id"]: m["title"] for m in library.items()}
             for hit in library.search(args.question, video_id=args.video, k=args.k):
                 s = hit.segment
-                print(f"{titles.get(hit.video_id, hit.video_id)}  {format_time(s.start)}-{format_time(s.end)}",
-                      file=out)
+                where = f"page {s.page}" if s.page else (f"passage {s.index + 1}" if s.start == s.end == 0
+                                                         else f"{format_time(s.start)}-{format_time(s.end)}")
+                print(f"{titles.get(hit.video_id, hit.video_id)}  {where}", file=out)
                 print(f"  {s.text[:300]}{'...' if len(s.text) > 300 else ''}", file=out)
                 if s.english:
                     print(f"  English: {s.english[:300]}{'...' if len(s.english) > 300 else ''}", file=out)
                 print(file=out)
         elif args.command == "ask":
-            titles = {m["id"]: m["title"] for m in library.videos()}
+            titles = {m["id"]: m["title"] for m in library.items()}
             hits = library.search(args.question, video_id=args.video, k=args.k)
             result = answer(args.question, hits, titles, llm=llm)
             print(result.text, file=out)
             for c in result.citations:
-                print(f"  > {titles.get(c.video_id, c.video_id)}  {format_time(c.start)}-{format_time(c.end)}",
-                      file=out)
+                where = f"page {c.page}" if c.page else f"{format_time(c.start)}-{format_time(c.end)}"
+                print(f"  > {titles.get(c.video_id, c.video_id)}  {where}", file=out)
     except (LibraryError, AnswerError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1

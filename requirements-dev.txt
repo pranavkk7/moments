@@ -8,3 +8,5 @@ fastapi
 python-multipart
 python-dotenv
 anthropic
+pypdf>=6
+python-docx>=1

@@ -7,7 +7,7 @@ import numpy as np
 from moments.library import Library
 
 library = Library(sys.argv[1] if len(sys.argv) > 1 else "data")
-for meta in library.videos():
+for meta in library.items():
     segments = library.segments(meta["id"])
     translated = [s for s in segments if s.english]
     arrays = {"original": library.embedder.passages([s.text for s in segments]),

@@ -62,3 +62,15 @@ def repair_words(words, language):
             w.text = fixed
             repaired = True
     return words, repaired
+
+
+def script_of(text):
+    """The writing system most of the letters in `text` belong to: "LATIN", "CJK", "DEVANAGARI",
+    "MALAYALAM", "ARABIC", ... Japanese kana and Chinese characters count as one script, "CJK"."""
+    counts = {}
+    for ch in text:
+        if ch.isalpha():
+            name = unicodedata.name(ch, "").split(" ")[0]
+            name = "CJK" if name in ("CJK", "HIRAGANA", "KATAKANA") else name
+            counts[name] = counts.get(name, 0) + 1
+    return max(counts, key=counts.get) if counts else ""

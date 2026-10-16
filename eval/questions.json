@@ -1,5 +1,5 @@
 {
- "note": "Answer ranges are [start, end] seconds where the answer is spoken, read from each video's timed transcript. An empty answer list means the video does not cover the question; those test whether written answers say so instead of guessing, and are skipped when scoring search.",
+ "note": "Answer ranges are [start, end] seconds where the answer is spoken, read from each video's timed transcript. An empty answer list means the video does not cover the question; those test whether written answers say so instead of guessing, and are skipped when scoring search. Document questions give the answer's page numbers (\"pages\") instead of time ranges.",
  "videos": [
   {
    "file": "en_reticulum_rex.ogv",
@@ -716,6 +716,153 @@
     },
     {
      "question": "Who discovered Alpha Centauri?",
+     "language": "en",
+     "answer": []
+    }
+   ]
+  },
+  {
+   "file": "en_open_content_cc_guide.pdf",
+   "questions": [
+    {
+     "question": "Which Creative Commons licence is the most permissive?",
+     "language": "en",
+     "pages": [
+      29
+     ]
+    },
+    {
+     "question": "Which Creative Commons licence is the most restrictive?",
+     "language": "en",
+     "pages": [
+      29,
+      31
+     ]
+    },
+    {
+     "question": "Which well-known project uses the CC BY-NC-SA licence?",
+     "language": "en",
+     "pages": [
+      31
+     ]
+    },
+    {
+     "question": "What is the difference between CC0 and the Public Domain Mark?",
+     "language": "en",
+     "pages": [
+      32
+     ]
+    },
+    {
+     "question": "Into how many jurisdictions was version 3 of the licences ported?",
+     "language": "en",
+     "pages": [
+      33
+     ]
+    },
+    {
+     "question": "What does the CC Rights Expression Language do on a web page?",
+     "language": "en",
+     "pages": [
+      67
+     ]
+    },
+    {
+     "question": "Who benefits most from NonCommercial licences?",
+     "language": "en",
+     "pages": [
+      48
+     ]
+    },
+    {
+     "question": "Can a remixed song be used under a NoDerivatives licence?",
+     "language": "en",
+     "pages": [
+      51
+     ]
+    },
+    {
+     "question": "What must you indicate when you share an adapted version of a licensed work?",
+     "language": "en",
+     "pages": [
+      30
+     ]
+    },
+    {
+     "question": "Can someone who is not the author upload content to Wikipedia?",
+     "language": "en",
+     "pages": [
+      22
+     ]
+    },
+    {
+     "question": "Where are the headquarters of Creative Commons?",
+     "language": "en",
+     "answer": []
+    }
+   ]
+  },
+  {
+   "file": "es_planetas_sistema_solar.pdf",
+   "questions": [
+    {
+     "question": "Which planet has the longest day?",
+     "language": "en",
+     "pages": [
+      1
+     ]
+    },
+    {
+     "question": "How old is the Earth?",
+     "language": "en",
+     "pages": [
+      2
+     ]
+    },
+    {
+     "question": "Why is Mars called the red planet?",
+     "language": "en",
+     "pages": [
+      2
+     ]
+    },
+    {
+     "question": "Which planet has the coldest atmosphere?",
+     "language": "en",
+     "pages": [
+      4
+     ]
+    },
+    {
+     "question": "Which planet has the strongest winds?",
+     "language": "en",
+     "pages": [
+      4
+     ]
+    },
+    {
+     "question": "How many Earths could fit inside Saturn?",
+     "language": "en",
+     "pages": [
+      3
+     ]
+    },
+    {
+     "question": "¿Cuál es el planeta más pequeño del Sistema Solar?",
+     "language": "es",
+     "pages": [
+      1
+     ]
+    },
+    {
+     "question": "¿Qué planeta tiene los vientos más fuertes?",
+     "language": "es",
+     "pages": [
+      4
+     ]
+    },
+    {
+     "question": "Who discovered Uranus?",
      "language": "en",
      "answer": []
     }

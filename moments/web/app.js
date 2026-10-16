@@ -1,17 +1,21 @@
-// Moments page: choose a video, ask, and jump to the moments the answer cites.
+// Moments page: choose a video or a document, ask, and open the moments the search found: a video at
+// the timestamp, a PDF at the page.
 const $ = (sel, root = document) => root.querySelector(sel)
 
 const player = $('[data-player]')
+const docFrame = $('[data-doc]')
+const screen = $('.screen')
 const empty = $('[data-empty]')
+const timeline = $('[data-timeline]')
 const track = $('[data-timeline] .timeline-track')
 const head = $('[data-head]')
 const select = $('[data-videos]')
 const result = $('[data-result]')
 const now = $('[data-now]')
 
-let videos = []
-let current = null // the video loaded in the player
-let marks = [] // citations for the loaded video
+let items = []
+let current = null // the video or document on show
+let marks = [] // the moments found for the last question
 let answers = false // whether the server writes answers (it needs an LLM API key) or only finds moments
 const askLabel = () => (answers ? 'Ask' : 'Find the moment')
 
@@ -23,6 +27,20 @@ function formatTime(seconds) {
   return h ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`
 }
 
+const isDocument = (item) => item?.kind === 'document'
+
+// Where a moment is: a timestamp in a video, a page (or a passage number) in a document.
+function place(c) {
+  if (c.kind !== 'document') return formatTime(c.start)
+  return c.page ? `p. ${c.page}` : `part ${c.part}`
+}
+
+function label(item) {
+  if (!isDocument(item)) return `${item.title} (${item.language}, ${formatTime(item.duration)})`
+  const pages = item.pages ? `, ${item.pages} pages` : ''
+  return `${item.title} (${item.format.toUpperCase()}, ${item.language}${pages})`
+}
+
 async function api(path, options) {
   const response = await fetch(path, options)
   const body = await response.json().catch(() => ({}))
@@ -30,33 +48,61 @@ async function api(path, options) {
   return body
 }
 
-async function loadVideos(selectId) {
-  videos = await api('/api/videos')
-  select.replaceChildren(new Option('All videos', ''))
-  for (const v of videos) select.add(new Option(`${v.title} (${v.language}, ${formatTime(v.duration)})`, v.id))
+async function loadItems(selectId) {
+  items = await api('/api/items')
+  select.replaceChildren(new Option('Everything', ''))
+  for (const item of items) select.add(new Option(label(item), item.id))
   if (selectId) {
     select.value = selectId
-    play(selectId, 0)
+    showItem(selectId, {})
   }
 }
 
-// Loads a video (if it isn't already) and starts it at `start` seconds.
-function play(videoId, start) {
-  if (!current || current.id !== videoId) {
-    current = videos.find((v) => v.id === videoId)
-    if (!current) return
-    player.src = `/media/${encodeURIComponent(videoId)}`
-    player.hidden = false
-    empty.hidden = true
-    showCredit()
-  }
+// Shows a video at `start` seconds, or a document at `page`.
+function showItem(itemId, { start = 0, page = null } = {}) {
+  const item = items.find((i) => i.id === itemId)
+  if (!item) return
+  const changed = current?.id !== itemId
+  current = item
+  empty.hidden = true
+  if (changed) showCredit()
+  if (isDocument(item)) showDocument(item, page)
+  else play(item, start, changed)
+  drawMarks()
+}
+
+function play(item, start, changed) {
+  docFrame.hidden = true
+  screen.classList.remove('is-doc')
+  timeline.hidden = false
+  player.hidden = false
+  if (changed) player.src = `/media/${encodeURIComponent(item.id)}`
   const seek = () => {
     player.currentTime = start
     player.play().catch(() => {})
   }
-  if (player.readyState >= 1) seek()
+  if (player.readyState >= 1 && !changed) seek()
   else player.addEventListener('loadedmetadata', seek, { once: true })
-  drawMarks()
+}
+
+// PDFs open in the browser's own viewer at the page; Word and text files have no pages to show, so the
+// passage below the viewer is the place.
+function showDocument(item, page) {
+  player.pause()
+  player.hidden = true
+  timeline.hidden = true
+  screen.classList.add('is-doc')
+  if (item.format === 'pdf') {
+    const target = page || 1
+    // The query string makes the viewer reload when only the page changes.
+    docFrame.src = `/media/${encodeURIComponent(item.id)}?page=${target}#page=${target}`
+    docFrame.hidden = false
+  } else {
+    docFrame.hidden = true
+    empty.hidden = false
+    $('.empty-title', empty).textContent = item.title
+    $('.empty-text', empty).textContent = 'This file has no pages to show. The matching passage is below.'
+  }
 }
 
 // Sample videos carry their author and licence, shown under the player as their licences require.
@@ -68,10 +114,10 @@ function showCredit() {
   credit.replaceChildren(link, ` by ${current.credit.author}, ${current.credit.license}, via Wikimedia Commons`)
 }
 
-// Yellow spans on the timeline, one per cited moment of the loaded video.
+// Yellow spans on the timeline, one per moment found in the video on show.
 function drawMarks() {
   track.querySelectorAll('.timeline-mark').forEach((m) => m.remove())
-  if (!current || !current.duration) return
+  if (!current || isDocument(current) || !current.duration) return
   marks.forEach((c) => {
     if (c.video_id !== current.id) return
     const mark = document.createElement('button')
@@ -87,8 +133,11 @@ function drawMarks() {
 }
 
 function jump(citation) {
-  play(citation.video_id, citation.start)
-  $('[data-now-time]').textContent = `${citation.title} · ${formatTime(citation.start)}–${formatTime(citation.end)}`
+  showItem(citation.video_id, { start: citation.start, page: citation.page })
+  const where = citation.kind === 'document'
+    ? (citation.page ? `page ${citation.page}` : `passage ${citation.part}`)
+    : `${formatTime(citation.start)}–${formatTime(citation.end)}`
+  $('[data-now-time]').textContent = `${citation.title} · ${where}`
   $('[data-now-text]').textContent = citation.english || citation.text
   const original = $('[data-now-original]')
   original.textContent = citation.english ? citation.text : ''
@@ -101,7 +150,7 @@ player.addEventListener('timeupdate', () => {
 })
 
 select.addEventListener('change', () => {
-  if (select.value) play(select.value, 0)
+  if (select.value) showItem(select.value, {})
 })
 
 $('[data-ask]').addEventListener('submit', async (event) => {
@@ -139,7 +188,7 @@ function showAnswer(body) {
   } else {
     // Search only: the moments are the answer.
     text.className = 'answer-heading'
-    text.textContent = marks.length ? 'Top moments' : 'Nothing in the video seems to match that question.'
+    text.textContent = marks.length ? 'Top moments' : 'Nothing in the library seems to match that question.'
   }
   box.append(text)
   if (marks.length) {
@@ -151,9 +200,9 @@ function showAnswer(body) {
       button.type = 'button'
       button.className = 'cite'
       button.innerHTML = '<span class="cite-time"></span><span class="cite-title"></span><span class="cite-text"></span>'
-      $('.cite-time', button).textContent = `${c.number}  ${formatTime(c.start)}`
+      $('.cite-time', button).textContent = `${c.number}  ${place(c)}`
       $('.cite-title', button).textContent = c.title
-      // English first when the video is in another language; the original words stay underneath.
+      // English first for a video in another language; the original words stay underneath.
       $('.cite-text', button).textContent = c.english || c.text
       if (c.english) {
         const original = Object.assign(document.createElement('span'), { className: 'cite-original', textContent: c.text })
@@ -185,17 +234,18 @@ form.addEventListener('submit', async (event) => {
   status.textContent = 'Uploading…'
   meter.style.width = '0'
   try {
-    const { job_id } = await api('/api/videos', { method: 'POST', body: new FormData(form) })
+    const { job_id } = await api('/api/items', { method: 'POST', body: new FormData(form) })
     for (;;) {
       const job = await api(`/api/jobs/${job_id}`)
       meter.style.width = `${Math.round(job.progress * 100)}%`
-      if (job.status === 'queued') status.textContent = 'Waiting for the previous video to finish…'
+      if (job.status === 'queued') status.textContent = 'Waiting for the previous file to finish…'
+      if (job.status === 'reading') status.textContent = 'Reading the document…'
       if (job.status === 'transcribing') status.textContent = `Transcribing… ${Math.round(job.progress * 100)}%`
       if (job.status === 'translating') status.textContent = `Translating into English… ${Math.round(job.progress * 100)}%`
       if (job.status === 'failed') throw new Error(job.error)
       if (job.status === 'done') {
         status.textContent = 'Done. You can ask it questions now.'
-        await loadVideos(job.video_id)
+        await loadItems(job.video_id)
         setTimeout(() => dialog.close(), 900)
         form.reset()
         break
@@ -215,6 +265,6 @@ api('/api/config').then((config) => {
   $('[data-ask-button]').textContent = askLabel()
 }).catch(() => {})
 
-loadVideos().catch((error) => {
+loadItems().catch((error) => {
   result.replaceChildren(Object.assign(document.createElement('p'), { className: 'answer-error', textContent: error.message }))
 })

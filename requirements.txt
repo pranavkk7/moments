@@ -6,3 +6,5 @@ sentence-transformers>=5
 chromadb>=1.5
 rank-bm25
 numpy
+pypdf>=6
+python-docx>=1

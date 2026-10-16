@@ -22,6 +22,7 @@ class Segment:
     end: float
     text: str
     english: str = ""  # the same stretch in English, for videos in other languages (see Library.translate)
+    page: int = None  # for a passage of a document: its page (None for formats without pages)
 
     def to_dict(self):
         return asdict(self)

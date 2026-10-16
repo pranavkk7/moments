@@ -13,16 +13,17 @@
   <body>
     <header class="bar">
       <a class="mark" href="/" aria-label="Moments, home"><span class="mark-dot" aria-hidden="true"></span>Moments</a>
-      <button class="btn btn-quiet" type="button" data-open-upload hidden>Add a video</button>
+      <button class="btn btn-quiet" type="button" data-open-upload hidden>Add a file</button>
     </header>
 
     <main class="layout">
       <section class="stage" aria-label="Player">
         <div class="screen">
           <video controls preload="metadata" playsinline data-player hidden></video>
+          <iframe class="doc" title="Document" data-doc hidden></iframe>
           <div class="screen-empty" data-empty>
-            <p class="empty-title">Pick a video, then ask it anything.</p>
-            <p class="empty-text">Questions can be in any language. Answers point to the exact moment.</p>
+            <p class="empty-title">Pick a video or a document, then ask it anything.</p>
+            <p class="empty-text">Questions can be in any language. Answers point to the exact moment or page.</p>
           </div>
         </div>
         <div class="timeline" data-timeline aria-label="Where the cited moments are">
@@ -38,8 +39,8 @@
 
       <section class="side" aria-label="Ask">
         <label class="field">
-          <span class="field-label">Video</span>
-          <select data-videos><option value="">All videos</option></select>
+          <span class="field-label">Search in</span>
+          <select data-videos><option value="">Everything</option></select>
         </label>
 
         <form class="ask" data-ask>
@@ -56,18 +57,18 @@
 
     <dialog class="upload" data-upload>
       <form class="upload-form" data-upload-form>
-        <h2 class="upload-title">Add a video</h2>
-        <p class="upload-text">Video or audio, any language. Transcribing takes about a third of the video's length.</p>
+        <h2 class="upload-title">Add a video or a document</h2>
+        <p class="upload-text">Video or audio in any language, or a PDF, Word or text file. Transcribing takes about a third of a video's length; documents are read in seconds.</p>
         <label class="field">
           <span class="field-label">File</span>
-          <input type="file" accept="video/*,audio/*" name="file" required />
+          <input type="file" accept="video/*,audio/*,.pdf,.docx,.txt,.md" name="file" required />
         </label>
         <label class="field">
           <span class="field-label">Title (optional)</span>
           <input type="text" name="title" maxlength="120" />
         </label>
         <label class="field">
-          <span class="field-label">Spoken language (optional)</span>
+          <span class="field-label">Spoken language, for videos (optional)</span>
           <input type="text" name="language" maxlength="20" placeholder="Detected automatically, or e.g. Hindi" />
         </label>
         <div class="upload-progress" data-upload-progress hidden>

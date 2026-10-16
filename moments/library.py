@@ -1,4 +1,5 @@
-"""The video library: transcripts and windows on disk, vectors in ChromaDB, and hybrid search over both.
+"""The library of videos and documents: their windows and passages on disk, vectors in ChromaDB, and
+hybrid search over all of them at once.
 
 Search combines two rankings, because each misses what the other finds:
 - meaning (dense vectors): finds a Hindi moment for an English question, and paraphrases;
@@ -8,7 +9,7 @@ ranked high by either method rises, and one ranked high by both rises most. Keyw
 when the question is in the same language as the text they matched; across languages, meaning decides.
 
 Layout under the data folder:
-    videos/<id>/meta.json        title, source file, language, engine, duration
+    videos/<id>/meta.json        title, source file, kind ("video" or "document"), language, ...
     videos/<id>/transcript.json  every timed word
     videos/<id>/segments.json    the time windows that search returns
     videos/<id>/vectors.npz      the windows' vectors, Moments' own copy (see _meaning_ranking)
@@ -27,7 +28,9 @@ import numpy as np
 from polysub import languages
 from polysub.audio import AudioError
 
+from .documents import DOCUMENT_TYPES, DocumentError, detect_language, passages, read_pages
 from .embed import Embedder
+from .scripts import script_of
 from .segments import Segment, attach_english, build_segments
 from .transcribe import transcribe, translate
 
@@ -67,18 +70,6 @@ def video_id_for(path):
         digest.update(f.read(1 << 20))
     slug = re.sub(r"[^a-z0-9]+", "-", path.stem.lower()).strip("-")[:40] or "video"
     return f"{slug}-{digest.hexdigest()[:8]}"
-
-
-def script_of(text):
-    """The writing system most of the letters in `text` belong to: "LATIN", "CJK", "DEVANAGARI",
-    "MALAYALAM", "ARABIC", ... Japanese kana and Chinese characters count as one script, "CJK"."""
-    counts = {}
-    for ch in text:
-        if ch.isalpha():
-            name = unicodedata.name(ch, "").split(" ")[0]
-            name = "CJK" if name in ("CJK", "HIRAGANA", "KATAKANA") else name
-            counts[name] = counts.get(name, 0) + 1
-    return max(counts, key=counts.get) if counts else ""
 
 
 def fold_accents(text):
@@ -143,7 +134,8 @@ class Library:
             self._english = self._open("english-")
         return self._english
 
-    def videos(self):
+    def items(self):
+        """Every video and document in the library, by title."""
         folder = self.root / "videos"
         if not folder.exists():
             return []
@@ -154,7 +146,7 @@ class Library:
     def meta(self, video_id):
         path = self._dir(video_id) / "meta.json"
         if not path.exists():
-            raise LibraryError(f"No video with id {video_id!r} in the library.")
+            raise LibraryError(f"Nothing with id {video_id!r} in the library.")
         return json.loads(path.read_text("utf-8"))
 
     def update_meta(self, video_id, **fields):
@@ -184,9 +176,11 @@ class Library:
         if script_of(query) != self.script(meta["id"]):
             return "en" if script_of(query) == "LATIN" else "other"
         own, english = self.vocabulary(meta["id"], meta["language"])
-        if not english:  # no translation: an English video, or not translated yet
-            return "own"
         words = set(tokens(query, meta["language"]))
+        if not english:
+            # No translation (an English video, or a document): the question is in the text's language
+            # when most of its words appear in the text.
+            return "own" if words and len(words & own) >= len(words) / 2 else "other"
         return "own" if len(words & own) > len(words & english) else "en"
 
     def segments(self, video_id):
@@ -203,6 +197,10 @@ class Library:
         path = Path(path)
         if not path.exists():
             raise LibraryError(f"File not found: {path}")
+        if path.suffix.lower() in DOCUMENT_TYPES:
+            if on_stage:
+                on_stage("reading")
+            return self.add_document(path, title=title)
         if on_stage:
             on_stage("transcribing")
         try:
@@ -228,7 +226,7 @@ class Library:
         """Adds an English translation to every window of a video in another language, and indexes it.
         Shown beside the original so a viewer can read what was said, and searched as well."""
         meta = self.meta(video_id)
-        if meta["language"] == "en":
+        if meta["language"] == "en" or meta.get("kind") == "document":  # Whisper translates speech only
             return False
         words = translate(meta["source"], meta["language"], pool=pool, progress=progress)
         self.set_english(video_id, words)
@@ -265,7 +263,7 @@ class Library:
         video_id = video_id_for(path)
         folder = self._dir(video_id)
         folder.mkdir(parents=True, exist_ok=True)
-        meta = {"id": video_id, "title": title or path.stem, "source": str(path.resolve()),
+        meta = {"id": video_id, "title": title or path.stem, "source": str(path.resolve()), "kind": "video",
                 "language": transcript.language, "engine": transcript.engine,
                 "script_repaired": transcript.script_repaired,
                 "duration": round(transcript.duration, 2), "segments": len(segments)}
@@ -275,26 +273,54 @@ class Library:
             json.dumps([s.to_dict() for s in segments], ensure_ascii=False, indent=1), "utf-8")
         (folder / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), "utf-8")
 
-        self._scripts.pop(video_id, None)
-        self._vocabulary.pop(video_id, None)
-        # Re-adding a video replaces its windows rather than duplicating them; a new transcript also
-        # makes any earlier translation stale.
-        self.collection.delete(where={"video_id": video_id})
-        self.english.delete(where={"video_id": video_id})
+        self._index(video_id, segments, transcript.language)
+        return video_id
+
+    def add_document(self, path, title=None):
+        """Reads a PDF, Word or text file and adds its passages. Returns its id."""
+        path = Path(path)
+        try:
+            pages = read_pages(path)
+        except DocumentError as error:
+            raise LibraryError(str(error)) from error
+        text = " ".join(p.text for p in pages)
+        if not text.strip():
+            raise LibraryError("No text was found in this document. Scanned PDFs need OCR, which Moments doesn't do.")
+        language = detect_language(text)
+        segments = passages(pages, language)
+        doc_id = video_id_for(path)
+        folder = self._dir(doc_id)
+        folder.mkdir(parents=True, exist_ok=True)
+        meta = {"id": doc_id, "title": title or path.stem, "source": str(path.resolve()), "kind": "document",
+                "format": path.suffix.lower().lstrip("."), "language": language,
+                "pages": max((p.number or 0) for p in pages) or None, "duration": 0, "segments": len(segments)}
+        (folder / "segments.json").write_text(
+            json.dumps([s.to_dict() for s in segments], ensure_ascii=False, indent=1), "utf-8")
+        (folder / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), "utf-8")
+        self._index(doc_id, segments, language)
+        return doc_id
+
+    def _index(self, item_id, segments, language):
+        """Vectors for an item's windows or passages: into ChromaDB, and Moments' own copy beside them.
+        Re-adding an item replaces its vectors rather than duplicating them; a new transcript also makes
+        any earlier translation stale."""
+        self._scripts.pop(item_id, None)
+        self._vocabulary.pop(item_id, None)
+        self.collection.delete(where={"video_id": item_id})
+        self.english.delete(where={"video_id": item_id})
         vectors = self.embedder.passages([s.text for s in segments])
-        np.savez(folder / "vectors.npz", original=vectors, original_index=[s.index for s in segments])
+        np.savez(self._dir(item_id) / "vectors.npz", original=vectors, original_index=[s.index for s in segments])
         self.collection.add(
-            ids=[f"{video_id}:{s.index}" for s in segments],
+            ids=[f"{item_id}:{s.index}" for s in segments],
             embeddings=vectors.tolist(),
             documents=[s.text for s in segments],
-            metadatas=[{"video_id": video_id, "index": s.index, "start": s.start, "end": s.end,
-                        "language": transcript.language} for s in segments],
+            metadatas=[{"video_id": item_id, "index": s.index, "start": s.start, "end": s.end,
+                        "page": s.page or 0, "language": language} for s in segments],
         )
-        return video_id
 
     # ---------- search ----------
 
-    def search(self, query, video_id=None, k=5, mode="hybrid", rankings=None):
+    def search(self, query, video_id=None, k=5, mode="hybrid", rankings=None, average=True):
         """The k best windows for a question. `mode` is "hybrid" (the default), or "meaning" / "keyword" to
         use one ranking alone; `rankings` picks any set of RANKINGS, which is how the evaluation measures
         what each contributes."""
@@ -304,9 +330,9 @@ class Library:
         query = (query or "").strip()
         if not query:
             raise LibraryError("Type a question first.")
-        targets = [self.meta(video_id)] if video_id else self.videos()
+        targets = [self.meta(video_id)] if video_id else self.items()
         if not targets:
-            raise LibraryError("The library is empty. Add a video first.")
+            raise LibraryError("The library is empty. Add a video or a document first.")
         windows = {(m["id"], s.index): s for m in targets for s in self.segments(m["id"])}
 
         only_one = len(rankings) == 1
@@ -336,6 +362,14 @@ class Library:
                 weight = weights[name](key[0])
                 if weight and key in windows:
                     scores[key] = scores.get(key, 0.0) + weight / (RRF_K + rank)
+        # Each score is averaged over the rankings its item can appear in. A translated video sits in four
+        # rankings and a document in two, so plain sums favoured translated videos whenever the whole
+        # library was searched (measured in the README). Within one item every window has the same
+        # rankings, so this changes nothing there.
+        open_to = {m["id"]: sum(1 for name in lists if weights[name](m["id"])
+                                and (not name.endswith("_en") or m.get("english"))) for m in targets}
+        if average:  # `average=False` restores plain sums, for the evaluation to compare
+            scores = {key: score / max(1, open_to[key[0]]) for key, score in scores.items()}
         best = sorted(scores, key=scores.get, reverse=True)[:k]
         language_of = {m["id"]: m["language"] for m in targets}
 

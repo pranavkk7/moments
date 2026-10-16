@@ -61,7 +61,7 @@ def test_adding_the_same_file_again_replaces_its_windows(library, media):
     count = library.collection.count()
     library.add(path, transcript(LECTURE))
     assert library.collection.count() == count
-    assert len(library.videos()) == 1
+    assert len(library.items()) == 1
 
 
 def test_video_ids_are_readable_and_tell_files_apart(media):
@@ -77,7 +77,7 @@ def test_helpful_errors(library, media):
     library.add(media("a.mp4"), transcript(["hello there"] * 5))
     with pytest.raises(LibraryError, match="Type a question"):
         library.search("   ")
-    with pytest.raises(LibraryError, match="No video"):
+    with pytest.raises(LibraryError, match="Nothing with id"):
         library.search("hello", video_id="missing")
     with pytest.raises(LibraryError, match="No speech"):
         library.add(media("silent.mp4", b"s"), transcript([""]))
@@ -169,7 +169,7 @@ def test_a_video_can_be_removed(library, media):
     a = library.add(path, transcript(["the exam is in march"] * 10))
     b = library.add(media("b.mp4", b"b"), transcript(["the exam is in april"] * 10))
     library.remove(a)
-    assert [v["id"] for v in library.videos()] == [b]
+    assert [v["id"] for v in library.items()] == [b]
     assert {h.video_id for h in library.search("exam", k=10)} == {b}
     assert path.exists()  # the original file is not touched
     with pytest.raises(LibraryError):

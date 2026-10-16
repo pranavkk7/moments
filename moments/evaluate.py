@@ -34,15 +34,21 @@ def overlaps(segment, ranges, min_overlap=MIN_OVERLAP):
     return any(min(segment.end, b) - max(segment.start, a) >= min(min_overlap, b - a) for a, b in ranges)
 
 
-def first_hit_rank(hits, ranges):
-    """1-based rank of the first window that covers an answer range, or None."""
-    return next((rank for rank, hit in enumerate(hits, start=1) if overlaps(hit.segment, ranges)), None)
+def is_answer(segment, ranges, pages=None):
+    """A window covers the answer when it overlaps an answer range; a document passage when it is on an
+    answer page."""
+    return segment.page in pages if pages else overlaps(segment, ranges)
+
+
+def first_hit_rank(hits, ranges, pages=None):
+    """1-based rank of the first window or passage that covers the answer, or None."""
+    return next((rank for rank, hit in enumerate(hits, start=1) if is_answer(hit.segment, ranges, pages)), None)
 
 
 def load_cases(path, library):
     """Questions joined to the library's video ids, matched by the sample's file name."""
     data = json.loads(Path(path).read_text("utf-8"))
-    by_file = {Path(m["source"]).name: m for m in library.videos()}
+    by_file = {Path(m["source"]).name: m for m in library.items()}
     cases = []
     for entry in data["videos"]:
         meta = by_file.get(entry["file"])
@@ -50,25 +56,41 @@ def load_cases(path, library):
             raise SystemExit(f"{entry['file']} is not in the library. Add it with: python -m moments add samples/{entry['file']}")
         for q in entry["questions"]:
             cases.append({"video_id": meta["id"], "video_language": meta["language"], "title": meta["title"],
-                          "question": q["question"], "question_language": q["language"],
-                          "ranges": [tuple(r) for r in q["answer"]]})
+                          "kind": meta.get("kind", "video"), "question": q["question"],
+                          "question_language": q["language"], "ranges": [tuple(r) for r in q.get("answer", [])],
+                          "pages": q.get("pages") or None})
     return cases
 
 
 def evaluate(library, cases, modes=MODES, k=5):
     """Scores per mode and per (video language, question language) group."""
-    cases = [c for c in cases if c["ranges"]]  # questions the video does not answer have nothing to find
+    cases = [c for c in cases if c["ranges"] or c["pages"]]  # unanswered questions have nothing to find
     results = {}
     for mode in modes:
         groups = defaultdict(list)
         for case in cases:
             hits = library.search(case["question"], video_id=case["video_id"], k=k, mode=mode)
-            rank = first_hit_rank(hits, case["ranges"])
+            rank = first_hit_rank(hits, case["ranges"], case["pages"])
             same = case["question_language"] == case["video_language"]
-            groups[(case["video_language"], "same language" if same else "English question")].append(rank)
+            item = case["video_language"] + (" document" if case["kind"] == "document" else "")
+            groups[(item, "same language" if same else "English question")].append(rank)
             groups[("all", "")].append(rank)
         results[mode] = {key: summarise(ranks) for key, ranks in groups.items()}
     return results
+
+
+def evaluate_library(library, cases, k=5, average=True):
+    """Every question asked of the whole library at once: a result counts only when it is the right
+    video or document and the right moment or page. Scores overall and per kind of item."""
+    cases = [c for c in cases if c["ranges"] or c["pages"]]
+    groups = defaultdict(list)
+    for case in cases:
+        hits = library.search(case["question"], k=k, average=average)
+        rank = next((r for r, h in enumerate(hits, start=1)
+                     if h.video_id == case["video_id"] and is_answer(h.segment, case["ranges"], case["pages"])), None)
+        groups["all"].append(rank)
+        groups[case["kind"] + "s"].append(rank)
+    return {name: summarise(ranks) for name, ranks in groups.items()}
 
 
 def evaluate_answers(library, cases, llm=None, per_video=3, k=6):
@@ -76,18 +98,21 @@ def evaluate_answers(library, cases, llm=None, per_video=3, k=6):
     does not answer. Returns the two rates and one row per question for inspection."""
     from .answer import answer
 
-    titles = {m["id"]: m["title"] for m in library.videos()}
+    titles = {m["id"]: m["title"] for m in library.items()}
     chosen, seen = [], defaultdict(int)
     for case in cases:
-        if not case["ranges"] or seen[case["video_id"]] < per_video:
+        answerable = bool(case["ranges"] or case["pages"])
+        if not answerable or seen[case["video_id"]] < per_video:
             chosen.append(case)
-            seen[case["video_id"]] += bool(case["ranges"])
+            seen[case["video_id"]] += answerable
     rows = []
     for case in chosen:
         hits = library.search(case["question"], video_id=case["video_id"], k=k)
         result = answer(case["question"], hits, titles, llm=llm)
-        cited_right = any(overlaps(Segment(0, c.start, c.end, ""), case["ranges"]) for c in result.citations)
-        rows.append({"question": case["question"], "title": case["title"], "covered": bool(case["ranges"]),
+        cited_right = any(is_answer(Segment(0, c.start, c.end, "", page=c.page), case["ranges"], case["pages"])
+                          for c in result.citations)
+        rows.append({"question": case["question"], "title": case["title"],
+                     "covered": bool(case["ranges"] or case["pages"]),
                      "found": result.found, "cited_right": cited_right, "answer": result.text})
     answerable = [r for r in rows if r["covered"]]
     absent = [r for r in rows if not r["covered"]]
@@ -109,11 +134,12 @@ def summarise(ranks):
 
 
 def table(results):
-    lines = ["| Mode | Video | Question | n | hit@1 | hit@3 | MRR |", "|---|---|---|---|---|---|---|"]
+    lines = ["| Mode | Item | Question | n | hit@1 | hit@3 | MRR |", "|---|---|---|---|---|---|---|"]
     for mode, groups in results.items():
-        for (video_language, kind), s in sorted(groups.items(), key=lambda kv: (kv[0][0] != "all", kv[0])):
-            video = "**all**" if video_language == "all" else languages.name(video_language)
-            lines.append(f"| {mode} | {video} | {kind} | {s['questions']} | {s['hit@1']:.0%} | {s['hit@3']:.0%} "
+        for (item, question), s in sorted(groups.items(), key=lambda kv: (kv[0][0] != "all", kv[0])):
+            code, _, kind = item.partition(" ")  # "es document" -> Spanish document; "es" -> Spanish video
+            label = "**all**" if item == "all" else f"{languages.name(code)} {kind or 'video'}"
+            lines.append(f"| {mode} | {label} | {question} | {s['questions']} | {s['hit@1']:.0%} | {s['hit@3']:.0%} "
                          f"| {s['mrr']:.2f} |")
     return "\n".join(lines)
 
@@ -129,6 +155,10 @@ def main(argv=None):
     cases = load_cases(args.questions, library)
     print(f"{len(cases)} questions, embedding model {library.embedder.name}\n")
     print(table(evaluate(library, cases, k=args.k)))
+    print("\nEvery question asked of the whole library (right item and right moment or page):\n")
+    print("| Items | n | hit@1 | hit@3 | MRR |\n|---|---|---|---|---|")
+    for name, s in evaluate_library(library, cases, k=args.k).items():
+        print(f"| {name} | {s['questions']} | {s['hit@1']:.0%} | {s['hit@3']:.0%} | {s['mrr']:.2f} |")
     if args.answers:
         from dotenv import load_dotenv
 

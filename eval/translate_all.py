@@ -6,7 +6,7 @@ import time
 from moments.library import Library
 
 library = Library(sys.argv[1] if len(sys.argv) > 1 else "data")
-for meta in library.videos():
+for meta in library.items():
     if meta["language"] != "en" and not meta.get("english"):
         start = time.time()
         library.translate(meta["id"])

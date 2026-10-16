@@ -1,26 +1,29 @@
 # Moments
 
-**Ask any video, in any language, and jump to the moment that answers.**
+**Ask your videos and documents anything, in any language, and jump to the moment or page that answers.**
 
-Upload a lecture, interview or meeting in Hindi, Arabic, Japanese, Spanish, English or about 100 other
-languages. Ask a question in English or in the video's own language, and Moments takes you to the exact
-moments that answer it, with the words that were said there translated into English: clicking one
-plays the video from there. Everything runs on your own machine, with
-no API key and no per-question cost.
+Add lectures, interviews and meetings in Hindi, Arabic, Japanese, Spanish, English or about 100 other
+languages, together with PDFs, Word files and notes. Ask a question in English or in the item's own
+language, and Moments takes you to the exact places that answer it: a video at the timestamp, with the
+words said there translated into English, or a PDF at the page. One search covers everything at once.
+It runs on your own machine, with no API key and no per-question cost.
 
 Optionally, with an LLM API key, Moments also writes a short answer that cites those moments.
 
 ![An English question about the Japanese version of a film. Moments jumps to 1:47, where the narrator says Jeff Bezos recommended the novel; each moment shows its English translation above the original Japanese, and yellow marks on the timeline show the three moments found.](docs/screenshot.png)
 
+![One question asked of the whole library: the results mix a moment from a video and pages of a PDF guide, and the PDF opens at the page.](docs/screenshot-documents.png)
+
 ## How it works
 
 ```
-video ──► speech recognition ──► timed words ──► 40-second windows ──► vectors + keyword index
-             (PolySub)                │              (overlapping)       (ChromaDB, BM25)
-                                      └─► English translation (Whisper) ─┘  for both languages
+video ──► speech recognition ──► timed words ──► 40-second windows ──┐
+             (PolySub)               │                                ├──► vectors + keyword index
+                                     └─► English translation (Whisper)┤    (ChromaDB, BM25)
+document ──► text, page by page ──► 150-word passages on one page ────┘
 
-question ──► hybrid search (meaning + keywords, language-aware) ──► top moments ──► (optional) LLM answer
-                                                                                    with checked citations
+question ──► hybrid search (meaning + keywords, language-aware, fair across items) ──► top moments
+                                                                  ──► (optional) LLM answer with checked citations
 ```
 
 1. **Transcribe.** Speech recognition comes from [PolySub](https://github.com/pranavkk7/polysub), which
@@ -30,45 +33,66 @@ question ──► hybrid search (meaning + keywords, language-aware) ──► 
 2. **Translate.** For a video in another language, Whisper also translates the speech into English, with
    its own timings, on the same GPU and without any API. Each window gets the English that was said
    inside it, which the page shows above the original words.
-3. **Cut into windows.** About 40 seconds each, ending at a pause where one is near, overlapping by 10
-   seconds so an idea that straddles a cut is whole in one window.
-4. **Index.** Multilingual embeddings (BAAI/bge-m3) for meaning and BM25 for exact names and numbers,
-   over both the original words and the English translation.
-5. **Search.** Up to four rankings are merged with reciprocal rank fusion: meaning and keywords in the
-   video's language, and meaning and keywords in English. A keyword match only counts when the question
-   is in the same language as the text it matched, judged by which of the two texts more of its words
-   appear in (measured below). Keywords ignore accents on Latin letters, so "púlsar" finds "pulsar".
-6. **Answer (optional).** With an API key, an LLM sees only the numbered moments, replies in a fixed JSON
+3. **Read documents.** PDFs page by page (pypdf), Word files and plain text. Words split across lines
+   are rejoined, and the language is detected from the script or the commonest words. Scanned PDFs
+   without a text layer are refused with a clear message, since Moments does not do OCR.
+4. **Cut into windows and passages.** Video windows are about 40 seconds, end at a pause where one is
+   near, and overlap by 10 seconds. Document passages are about 150 words, overlap by 30 and never
+   cross a page, so every result can name its page.
+5. **Index.** Multilingual embeddings (BAAI/bge-m3) for meaning and BM25 for exact names and numbers,
+   over the original words and, for videos in other languages, the English translation. Moments keeps
+   its own copy of every item's vectors next to ChromaDB's index.
+6. **Search.** Up to four rankings are merged with reciprocal rank fusion: meaning and keywords in the
+   item's language, and meaning and keywords in English. A keyword match only counts when the question
+   is in the same language as the text it matched. Each result's score is averaged over the rankings its
+   item can appear in, so videos with a translation don't crowd out documents (measured below).
+7. **Answer (optional).** With an API key, an LLM sees only the numbered moments, replies in a fixed JSON
    schema, and the code checks that every cited moment is one it was actually given. This part is covered
    by unit tests; the results below measure search, which is what Moments does without a key.
 
 ## Results
 
-67 questions over 5 videos in 5 languages, each with the time range where the answer is spoken, read
-from the timed transcripts ([eval/questions.json](eval/questions.json)). A result counts when its window
-overlaps the answer by at least 3 seconds. `python -m moments.evaluate` reproduces the tables and
-`python eval/compare_rankings.py` the comparison of rankings.
+85 questions over 5 videos and 2 PDFs in 5 languages ([eval/questions.json](eval/questions.json)). Each
+video question has the time range where the answer is spoken, read from the timed transcript; a result
+counts when its window overlaps that range by at least 3 seconds. Each document question has the page
+the answer is on. `python -m moments.evaluate` reproduces the tables and `python eval/compare_rankings.py`
+the comparison of rankings.
 
-| Search | Right moment first | In the top 3 | MRR |
+**Searching one item** (the question is asked of the video or document it is about):
+
+| Search | Right place first | In the top 3 | MRR |
 |---|---|---|---|
-| **Moments (four rankings, language-aware)** | **90%** | **100%** | **0.94** |
-| Original language only (meaning + keywords) | 85% | 99% | 0.92 |
-| Meaning only (bge-m3) | 81% | 99% | 0.90 |
-| Keywords only (BM25) | 42% | 52% | 0.48 |
+| **Moments (four rankings, language-aware)** | **87%** | **99%** | **0.93** |
+| Original language only (meaning + keywords) | 84% | 98% | 0.91 |
+| Meaning only (bge-m3) | 79% | 96% | 0.88 |
+| Keywords only (BM25) | 40% | 53% | 0.47 |
 
-By group:
-
-| Video | Questions in | n | First | Top 3 |
+| Item | Questions in | n | First | Top 3 |
 |---|---|---|---|---|
-| English | English | 12 | 92% | 100% |
-| Spanish | English | 12 | 100% | 100% |
-| Spanish | Spanish | 3 | 100% | 100% |
-| Japanese | English | 12 | 75% | 100% |
-| Japanese | Japanese | 4 | 100% | 100% |
-| Hindi | English | 8 | 75% | 100% |
-| Hindi | Hindi | 3 | 100% | 100% |
-| Arabic | English | 10 | 90% | 100% |
-| Arabic | Arabic | 3 | 100% | 100% |
+| English video | English | 12 | 92% | 100% |
+| Spanish video | English | 12 | 100% | 100% |
+| Spanish video | Spanish | 3 | 100% | 100% |
+| Japanese video | English | 12 | 75% | 100% |
+| Japanese video | Japanese | 4 | 100% | 100% |
+| Hindi video | English | 8 | 75% | 100% |
+| Hindi video | Hindi | 3 | 100% | 100% |
+| Arabic video | English | 10 | 90% | 100% |
+| Arabic video | Arabic | 3 | 100% | 100% |
+| English PDF guide (80 pages) | English | 10 | 60% | 90% |
+| Spanish PDF (4 pages) | English | 6 | 100% | 100% |
+| Spanish PDF (4 pages) | Spanish | 2 | 100% | 100% |
+
+**Searching the whole library** (every question is asked of all 7 items at once, and a result counts only
+when it is the right item and the right moment or page):
+
+| Fusion | Items | First | Top 3 | MRR |
+|---|---|---|---|---|
+| **Averaged per item (Moments)** | all 85 | **73%** | **92%** | **0.83** |
+| | videos 67 | 72% | 91% | 0.82 |
+| | documents 18 | 78% | 94% | 0.86 |
+| Plain sums | all 85 | 59% | 67% | 0.65 |
+| | videos 67 | 73% | 81% | 0.78 |
+| | documents 18 | 6% | 17% | 0.17 |
 
 What the numbers showed, in the order the changes were made:
 
@@ -82,10 +106,17 @@ What the numbers showed, in the order the changes were made:
   were keyword-matched against Spanish words, and the Spanish video scored 92% and 67% first for English
   and Spanish questions while meaning alone scored 100%. Judging the question's language from which text
   its words appear in fixed it: 100% for both.
-- **Searching the English translation too was the biggest single gain.** For English questions on the
-  four non-English videos it lifted first place from 79% to 86% and put the right moment in the top 3
-  every time; Japanese went from 58% to 75%. Same-language questions were unchanged, and the
-  translation alone would have been far worse for them (52% first), so Moments keeps both.
+- **Searching the English translation too was the biggest single gain for videos.** For English questions
+  on the four non-English videos it lifted first place from 79% to 86% and put the right moment in the
+  top 3 every time; Japanese went from 58% to 75%. The translation alone would have been far worse for
+  same-language questions (52% first), so Moments keeps both.
+- **Plain fusion was unfair in a mixed library.** Adding up ranks meant a translated video, which sits in
+  four rankings, beat a document, which sits in two, even when the document held the answer: only 6% of
+  document questions found the right page first when the whole library was searched. Averaging each
+  score over the rankings its item can appear in lifted that to 78% and the whole library from 59% to
+  73%, without changing any ranking within a single item.
+- **The long guide is the hardest item.** Its 80 pages come back to the same licences many times, so the
+  first result is often a neighbouring discussion of the same topic (60% first, 90% in the top 3).
 
 Small test sets: treat differences of one or two questions as noise.
 
@@ -99,44 +130,54 @@ file, which is why transcription now uses a fixed random seed. Malayalam was the
 samples, because Whisper still skipped whole sentences of it; a speech model trained for Malayalam would
 be the way back.
 
+### A ChromaDB edge case
+
+About once in 25 test runs, ChromaDB could not read its index right after an item's vectors were
+replaced ("Error creating hnsw segment reader: Nothing found on disk"). Moments keeps its own copy of
+each item's vectors and ranks those exactly when that happens: on the whole test set the fallback gives
+the same scores as ChromaDB, and 40 test runs in a row passed after the change.
+
 ## Run it
 
 ```bash
 python -m venv --system-site-packages .venv     # reuses a CUDA build of PyTorch if installed globally
-.venv/Scripts/pip install -e ../polysub -r requirements.txt fastapi "uvicorn[standard]" python-multipart python-dotenv anthropic
+.venv/Scripts/pip install -e ../polysub -r requirements.txt fastapi "uvicorn[standard]" python-multipart python-dotenv
 copy .env.example .env                           # optional: an API key for written answers
 
-.venv/Scripts/python -m moments add lecture.mp4 --language ml
+.venv/Scripts/python -m moments add lecture.mp4 --language hi
+.venv/Scripts/python -m moments add handbook.pdf
 .venv/Scripts/python -m moments search "when is the exam?"
 .venv/Scripts/python -m moments ask "when is the exam?"                  # needs the optional API key
 .venv/Scripts/python -m uvicorn moments.api:app --port 8010     # the web page
 ```
 
 `MOMENTS_DEMO=1` runs the page without uploads (for hosting without a GPU) over an existing library;
-`python eval/attach_samples.py` points the sample videos at copies on Wikimedia Commons that every browser
-plays, with their credit lines.
+`python eval/attach_samples.py` points the samples at their copies on Wikimedia Commons, which every
+browser can play or open, with their credit lines.
 
-Transcription needs an NVIDIA GPU (tested on an RTX 4060, 8 GB). Search runs on the CPU too.
+Transcription needs an NVIDIA GPU (tested on an RTX 4060, 8 GB). Documents and search run on the CPU too.
 
 ```bash
 .venv/Scripts/python -m pytest       # tests use stand-ins: no GPU, model download or API key needed
 ```
 
-## Sample videos
+## Samples
 
 All from Wikimedia Commons, used under their licences:
 
 | File | Language | Licence |
 |---|---|---|
-| [Reticulum Rex](https://commons.wikimedia.org/wiki/File:Reticulum_Rex_with_subtitles_-_Creative_Commons.ogv), Creative Commons | English | CC BY-SA 1.0 |
-| [Reticulum Rex (in Japanese)](https://commons.wikimedia.org/wiki/File:Reticulum_Rex_(in_Japanese)_-_Creative_Commons..ogv), Creative Commons | Japanese | CC BY-SA 2.1 JP |
-| [About The Sengol](https://commons.wikimedia.org/wiki/File:About_The_Sengol,_About_its_History_and_Significance.webm) | Hindi | CC BY 3.0 |
-| [Ancient construction practices, Dura-Europos (Djuss)](https://commons.wikimedia.org/wiki/File:Ancient_construction_practices_Dura-Europos_(Djuss).webm) | Arabic | CC BY-SA 4.0 |
-| ["Las estrellas"](https://commons.wikimedia.org/wiki/File:%22Las_estrellas%22_(Worldnet_TV)..webm), Worldnet TV documentary | Spanish | Public domain |
+| [Reticulum Rex](https://commons.wikimedia.org/wiki/File:Reticulum_Rex_with_subtitles_-_Creative_Commons.ogv), Creative Commons (video) | English | CC BY-SA 1.0 |
+| [Reticulum Rex (in Japanese)](https://commons.wikimedia.org/wiki/File:Reticulum_Rex_(in_Japanese)_-_Creative_Commons..ogv), Creative Commons (video) | Japanese | CC BY-SA 2.1 JP |
+| [About The Sengol](https://commons.wikimedia.org/wiki/File:About_The_Sengol,_About_its_History_and_Significance.webm) (video) | Hindi | CC BY 3.0 |
+| [Ancient construction practices, Dura-Europos (Djuss)](https://commons.wikimedia.org/wiki/File:Ancient_construction_practices_Dura-Europos_(Djuss).webm) (video) | Arabic | CC BY-SA 4.0 |
+| ["Las estrellas"](https://commons.wikimedia.org/wiki/File:%22Las_estrellas%22_(Worldnet_TV)..webm), Worldnet TV documentary (video) | Spanish | Public domain |
+| [Open Content: A Practical Guide to Using Creative Commons Licences](https://commons.wikimedia.org/wiki/File:Open_Content_-_A_Practical_Guide_to_Using_Creative_Commons_Licences.pdf), Till Kreutzer (PDF, 80 pages) | English | CC BY 4.0 |
+| [Planetas del sistema solar](https://commons.wikimedia.org/wiki/File:Planetas_del_sistema_solar.pdf) (PDF, 4 pages) | Spanish | CC BY-SA 4.0 |
 
-The files themselves are not in the repository (`samples/` is ignored); [eval/samples.json](eval/samples.json) lists
-where each came from.
+The files themselves are not in the repository (`samples/` is ignored); [eval/samples.json](eval/samples.json)
+lists where each came from.
 
 ## Licence
 
-The code is released under the [MIT licence](LICENSE). The sample videos keep their own licences (above).
+The code is released under the [MIT licence](LICENSE). The samples keep their own licences (above).

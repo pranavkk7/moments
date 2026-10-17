@@ -106,6 +106,16 @@ def create_app(library=None, jobs=None, llm=None, demo=None, answers=None):
     answers = (llm is not None or answers_enabled()) if answers is None else answers
     jobs = jobs or (None if demo else Jobs(library))
     app = FastAPI(title="Moments")
+
+    @app.middleware("http")
+    async def revalidate_the_page(request, call_next):
+        # The page and its script and styles are checked with the server on every load (cheap: an
+        # unchanged file comes back as "304 Not Modified"), so an update is never hidden behind a stale
+        # cached copy.
+        response = await call_next(request)
+        if request.url.path == "/" or request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
     uploads = library.root / "uploads"
 
     @app.get("/api/config")
@@ -184,10 +194,14 @@ def create_app(library=None, jobs=None, llm=None, demo=None, answers=None):
             meta = library.meta(video_id)
         except LibraryError as error:
             raise HTTPException(404, str(error)) from error
-        if meta.get("media_url"):
-            # A published copy every browser can play (Chrome and Edge no longer play Ogg Theora).
-            return RedirectResponse(meta["media_url"])
         source = Path(meta["source"])
+        document = meta.get("kind") == "document"
+        # Videos go to their published copy, which every browser can play (Chrome and Edge no longer
+        # play Ogg Theora). Documents are served from here whenever the file is present: Wikimedia asks
+        # that its files not be shown inside other pages (CSP frame-ancestors 'none'), and the page shows
+        # a PDF inside its viewer.
+        if meta.get("media_url") and not (document and source.exists()):
+            return RedirectResponse(meta["media_url"])
         if not source.exists():
             raise HTTPException(404, "The original file has been moved or deleted.")
         # FileResponse answers range requests, which is what lets the player seek to a moment.

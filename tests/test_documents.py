@@ -204,3 +204,14 @@ def test_document_results_show_their_english_first(library, tmp_path):
     client = TestClient(create_app(library=library, answers=False, demo=True))
     top = client.post("/api/ask", json={"question": "Which planet is red?"}).json()["citations"][0]
     assert top["page"] == 2 and top["english"].startswith("mars") and top["text"].startswith("Marte")
+
+
+def test_documents_are_served_from_the_library_even_with_a_published_copy(library, tmp_path):
+    # Wikimedia asks that its files not be framed, and the page shows PDFs in a frame.
+    doc = library.add_document(make_pdf(tmp_path / "solar.pdf", SOLAR))
+    library.update_meta(doc, media_url="https://upload.example.org/solar.pdf")
+    client = TestClient(create_app(library=library, answers=False, demo=True))
+    local = client.get(f"/media/{doc}", follow_redirects=False)
+    assert local.status_code == 200 and local.headers["content-type"] == "application/pdf"
+    (tmp_path / "solar.pdf").unlink()  # without the file (a hosted demo), the published copy is used
+    assert client.get(f"/media/{doc}", follow_redirects=False).status_code == 307

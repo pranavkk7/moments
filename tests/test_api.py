@@ -139,3 +139,8 @@ def test_moments_carry_their_english_translation(library, media):
     body = client.post("/api/ask", json={"question": "MIT lecture", "video_id": ja}).json()
     assert body["citations"][0]["english"] == "A lecture at MIT."
     assert "MIT" in body["citations"][0]["text"]
+
+
+def test_the_page_is_revalidated_so_updates_are_never_hidden_by_the_cache(client):
+    assert client.get("/").headers["cache-control"] == "no-cache"
+    assert client.get("/static/app.js").headers["cache-control"] == "no-cache"

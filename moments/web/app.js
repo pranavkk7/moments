@@ -73,6 +73,7 @@ function showItem(itemId, { start = 0, page = null } = {}) {
 
 function play(item, start, changed) {
   docFrame.hidden = true
+  $('[data-doc-link]').hidden = true
   screen.classList.remove('is-doc')
   timeline.hidden = false
   player.hidden = false
@@ -92,12 +93,19 @@ function showDocument(item, page) {
   player.hidden = true
   timeline.hidden = true
   screen.classList.add('is-doc')
+  // A link to the same page in a new tab, for browsers set to download PDFs rather than show them.
+  const link = $('[data-doc-link] a')
+  $('[data-doc-link]').hidden = false
   if (item.format === 'pdf') {
     const target = page || 1
     // The query string makes the viewer reload when only the page changes.
     docFrame.src = `/media/${encodeURIComponent(item.id)}?page=${target}#page=${target}`
     docFrame.hidden = false
+    link.href = docFrame.src
+    link.textContent = `Open page ${target} in a new tab`
   } else {
+    link.href = `/media/${encodeURIComponent(item.id)}`
+    link.textContent = 'Open the file in a new tab'
     docFrame.hidden = true
     empty.hidden = false
     $('.empty-title', empty).textContent = item.title

@@ -5,7 +5,7 @@
 Add lectures, interviews and meetings in Hindi, Arabic, Japanese, Spanish, English or about 100 other
 languages, together with PDFs, Word files and notes. Ask a question in English or in the item's own
 language, and Moments takes you to the exact places that answer it: a video at the timestamp, with the
-words said there translated into English, or a PDF at the page. One search covers everything at once.
+words said there translated into English, or a PDF at the page, again with English first. One search covers everything at once.
 It runs on your own machine, with no API key and no per-question cost.
 
 Optionally, with an LLM API key, Moments also writes a short answer that cites those moments.
@@ -32,7 +32,9 @@ question ──► hybrid search (meaning + keywords, language-aware, fair acros
    same transcript.
 2. **Translate.** For a video in another language, Whisper also translates the speech into English, with
    its own timings, on the same GPU and without any API. Each window gets the English that was said
-   inside it, which the page shows above the original words.
+   inside it, which the page shows above the original words. Documents in Spanish, Hindi, Arabic or
+   Japanese are translated sentence by sentence with the University of Helsinki's Opus-MT models
+   (about 300 MB each, run locally); the Hindi model is the weakest of the four.
 3. **Read documents.** PDFs page by page (pypdf), Word files and plain text. Running headers and
    footers (lines that recur at the top or bottom of many pages) are dropped, words split across lines
    are rejoined, and headings that a small-capitals font turned into "CreATive COmmOns" are put back
@@ -43,7 +45,7 @@ question ──► hybrid search (meaning + keywords, language-aware, fair acros
    near, and overlap by 10 seconds. Document passages are about 150 words, overlap by 30 and never
    cross a page, so every result can name its page.
 5. **Index.** Multilingual embeddings (BAAI/bge-m3) for meaning and BM25 for exact names and numbers,
-   over the original words and, for videos in other languages, the English translation. Moments keeps
+   over the original words and, for items in other languages, the English translation. Moments keeps
    its own copy of every item's vectors next to ChromaDB's index.
 6. **Search.** Up to four rankings are merged with reciprocal rank fusion: meaning and keywords in the
    item's language, and meaning and keywords in English. A keyword match only counts when the question
@@ -95,7 +97,7 @@ when it is the right item and the right moment or page):
 | Fusion | Items | First | Top 3 | MRR |
 |---|---|---|---|---|
 | **Averaged per item (Moments)** | all 85 | **71%** | **92%** | **0.81** |
-| | videos 67 | 72% | 91% | 0.81 |
+| | videos 67 | 72% | 91% | 0.82 |
 | | documents 18 | 67% | 94% | 0.79 |
 | Plain sums | all 85 | 59% | 67% | 0.64 |
 | | videos 67 | 73% | 81% | 0.78 |

@@ -34,6 +34,7 @@ from .highlight import best_sentences
 from .scripts import script_of
 from .segments import Segment, attach_english, build_segments
 from .transcribe import transcribe, translate
+from .translate_text import TextTranslator, can_translate
 
 RRF_K = 60  # the usual constant: damps the gap between rank 1 and rank 2
 CANDIDATES = 30  # how many windows each method contributes before fusion
@@ -105,6 +106,7 @@ class Library:
         self.embedder = embedder or Embedder()
         self._collection = None
         self._english = None
+        self._text_translator = None  # loaded only when a document needs translating
         self._scripts = {}  # video id -> writing system of its transcript
         self._vocabulary = {}  # video id -> (terms of the transcript, terms of its English translation)
 
@@ -202,7 +204,12 @@ class Library:
         if path.suffix.lower() in DOCUMENT_TYPES:
             if on_stage:
                 on_stage("reading")
-            return self.add_document(path, title=title)
+            doc_id = self.add_document(path, title=title)
+            if english and can_translate(self.meta(doc_id)["language"]):
+                if on_stage:
+                    on_stage("translating")
+                self.translate(doc_id, progress=progress)
+            return doc_id
         if on_stage:
             on_stage("transcribing")
         try:
@@ -225,20 +232,42 @@ class Library:
         self._scripts.pop(video_id, None)
 
     def translate(self, video_id, pool=None, progress=None):
-        """Adds an English translation to every window of a video in another language, and indexes it.
-        Shown beside the original so a viewer can read what was said, and searched as well."""
+        """Adds an English translation to every window or passage of an item in another language, and
+        indexes it. Shown above the original so a viewer can read it, and searched as well. Videos are
+        translated from their speech by Whisper; documents by a text translation model, for the
+        languages it covers."""
         meta = self.meta(video_id)
-        if meta["language"] == "en" or meta.get("kind") == "document":  # Whisper translates speech only
+        if meta["language"] == "en":
             return False
+        if meta.get("kind") == "document":
+            if not can_translate(meta["language"]):
+                return False
+            if self._text_translator is None:
+                self._text_translator = TextTranslator()
+            texts = self._text_translator.translate([s.text for s in self.segments(video_id)], meta["language"],
+                                                    progress=progress)
+            self.set_english_texts(video_id, texts)
+            return True
         words = translate(meta["source"], meta["language"], pool=pool, progress=progress)
         self.set_english(video_id, words)
         return True
 
     def set_english(self, video_id, words):
+        """A video's English, from translated words with their timings."""
         segments = attach_english(self.segments(video_id), words)
-        folder = self._dir(video_id)
-        (folder / "transcript_en.json").write_text(
+        (self._dir(video_id) / "transcript_en.json").write_text(
             json.dumps([{"text": w.text, "start": w.start, "end": w.end} for w in words], ensure_ascii=False), "utf-8")
+        self._store_english(video_id, segments)
+
+    def set_english_texts(self, item_id, texts):
+        """A document's English: one translated text per passage, in order."""
+        segments = self.segments(item_id)
+        for segment, text in zip(segments, texts):
+            segment.english = text
+        self._store_english(item_id, segments)
+
+    def _store_english(self, video_id, segments):
+        folder = self._dir(video_id)
         (folder / "segments.json").write_text(
             json.dumps([s.to_dict() for s in segments], ensure_ascii=False, indent=1), "utf-8")
         self.update_meta(video_id, english=True)

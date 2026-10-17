@@ -8,3 +8,4 @@ rank-bm25
 numpy
 pypdf>=6
 python-docx>=1
+sentencepiece   # Opus-MT document translation (transformers comes with sentence-transformers)

@@ -170,3 +170,37 @@ def test_small_capitals_are_put_back_only_for_words_the_document_also_writes_nor
     text = "The CreATive COmmOns liCenCing sCheme, used by OpenCourseWare, with PDFs and YouTube."
     assert fix_small_caps(text, vocabulary) == \
         "The Creative Commons licencing scheme, used by OpenCourseWare, with PDFs and YouTube."
+
+
+class FakeTextTranslator:
+    """Translates by a word list, so the tests need no translation model."""
+    WORDS = {"la": "the", "tierra": "earth", "es": "is", "donde": "where", "vivimos": "we live",
+             "marte": "mars", "rojo": "red", "planeta": "planet", "júpiter": "jupiter", "grande": "big",
+             "saturno": "saturn", "tiene": "has", "anillos": "rings", "venus": "venus", "caliente": "hot"}
+
+    def translate(self, texts, language, progress=None):
+        return [" ".join(self.WORDS.get(w.strip(".").lower(), w) for w in t.split()) for t in texts]
+
+
+PLANETAS = ["La Tierra es donde vivimos.", "Marte es el planeta rojo.", "Jupiter es grande.",
+            "Saturno tiene anillos.", "Venus es caliente."]
+
+
+def test_documents_in_other_languages_are_translated_into_english(library, tmp_path):
+    library._text_translator = FakeTextTranslator()
+    stages = []
+    doc = library.ingest(make_pdf(tmp_path / "planetas.pdf", PLANETAS), on_stage=stages.append)
+    assert library.meta(doc)["language"] == "es" and library.meta(doc)["english"] is True
+    assert stages == ["reading", "translating"]
+    assert library.segments(doc)[1].english.startswith("mars is el planet red")
+    # The English is searched too: the question's words appear in the translation, not the Spanish.
+    hit = library.search("Which planet is red?", video_id=doc, k=1)[0]
+    assert hit.segment.page == 2 and set(hit.ranks) & {"meaning_en", "keyword_en"}
+
+
+def test_document_results_show_their_english_first(library, tmp_path):
+    library._text_translator = FakeTextTranslator()
+    library.ingest(make_pdf(tmp_path / "planetas.pdf", PLANETAS))
+    client = TestClient(create_app(library=library, answers=False, demo=True))
+    top = client.post("/api/ask", json={"question": "Which planet is red?"}).json()["citations"][0]
+    assert top["page"] == 2 and top["english"].startswith("mars") and top["text"].startswith("Marte")

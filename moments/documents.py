@@ -83,6 +83,58 @@ def detect_language(text):
     return max(votes, key=votes.get) if any(votes.values()) else "en"
 
 
+def remove_running_lines(pages, edge=2):
+    """Drops headers and footers: lines among the first or last `edge` of a page that recur, ignoring
+    digits and punctuation, on several pages ("3. The Creative Commons licencing scheme 31" on every page
+    of a chapter). Left in, they would start passages with noise and add the same words to all of them."""
+    def key(line):
+        return re.sub(r"[\W\d_]+", "", line.lower())
+
+    numbered = [p for p in pages if p.number]
+    if len(numbered) < 3:
+        return pages
+    edges = []
+    for page in numbered:
+        lines = [l for l in page.text.split("\n") if l.strip()]
+        edges.append({key(l) for l in lines[:edge] + lines[-edge:] if key(l)})
+    counts = {}
+    for found in edges:
+        for k in found:
+            counts[k] = counts.get(k, 0) + 1
+    running = {k for k, n in counts.items() if n >= max(3, len(numbered) // 20)}
+    if not running:
+        return pages
+    out = []
+    for page in pages:
+        lines = page.text.split("\n")
+        kept_idx = [i for i, l in enumerate(lines) if l.strip()]
+        edge_idx = set(kept_idx[:edge] + kept_idx[-edge:])
+        text = "\n".join(l for i, l in enumerate(lines) if not (i in edge_idx and key(l) in running))
+        out.append(Page(page.number, text))
+    return out
+
+
+MIXED_CASE = re.compile(r"\b[A-Za-z]*[a-z][A-Z][A-Za-z]*\b|\b[A-Z]{2,}[a-z][A-Za-z]*\b")
+
+
+def fix_small_caps(text, vocabulary):
+    """Some PDF fonts set headings in small capitals, which text extraction returns as "CreATive" or
+    "COmmOns". A mixed-case word is put back to normal case when the document also uses it in plain
+    lower case elsewhere ("licencing"); names like "OpenCourseWare" and plurals like "PDFs" never appear
+    that way, so they are left alone."""
+    def fix(match):
+        word = match.group(0)
+        if word.lower() not in vocabulary:
+            return word
+        return word[0] + word[1:].lower() if word[0].isupper() else word.lower()
+
+    return MIXED_CASE.sub(fix, text)
+
+
+def lowercase_words(pages):
+    return {w for p in pages for w in re.findall(r"\b[a-z]{3,}\b", p.text)}
+
+
 def clean(text):
     """Joins words split across lines with a hyphen and collapses the line breaks of PDF text."""
     text = re.sub(r"(\w) ?-\n\s*(\w)", r"\1\2", text)  # "commer-" or "commer -" at a line end
@@ -90,11 +142,13 @@ def clean(text):
 
 
 def passages(pages, language, words=PASSAGE_WORDS, overlap=OVERLAP_WORDS):
-    """Overlapping passages that each stay within one page."""
+    """Overlapping passages that each stay within one page, without the pages' headers and footers."""
     no_spaces = language in ("ja", "zh")
+    pages = remove_running_lines(pages)
+    vocabulary = lowercase_words(pages)
     out = []
     for page in pages:
-        text = clean(page.text)
+        text = fix_small_caps(clean(page.text), vocabulary)
         if not text:
             continue
         units = list(text) if no_spaces else text.split(" ")

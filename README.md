@@ -33,9 +33,12 @@ question ──► hybrid search (meaning + keywords, language-aware, fair acros
 2. **Translate.** For a video in another language, Whisper also translates the speech into English, with
    its own timings, on the same GPU and without any API. Each window gets the English that was said
    inside it, which the page shows above the original words.
-3. **Read documents.** PDFs page by page (pypdf), Word files and plain text. Words split across lines
-   are rejoined, and the language is detected from the script or the commonest words. Scanned PDFs
-   without a text layer are refused with a clear message, since Moments does not do OCR.
+3. **Read documents.** PDFs page by page (pypdf), Word files and plain text. Running headers and
+   footers (lines that recur at the top or bottom of many pages) are dropped, words split across lines
+   are rejoined, and headings that a small-capitals font turned into "CreATive COmmOns" are put back
+   when the document also writes those words normally. The language is detected from the script or the
+   commonest words. Scanned PDFs without a text layer are refused with a clear message, since Moments
+   does not do OCR.
 4. **Cut into windows and passages.** Video windows are about 40 seconds, end at a pause where one is
    near, and overlap by 10 seconds. Document passages are about 150 words, overlap by 30 and never
    cross a page, so every result can name its page.
@@ -62,10 +65,10 @@ the comparison of rankings.
 
 | Search | Right place first | In the top 3 | MRR |
 |---|---|---|---|
-| **Moments (four rankings, language-aware)** | **87%** | **99%** | **0.93** |
-| Original language only (meaning + keywords) | 84% | 98% | 0.91 |
-| Meaning only (bge-m3) | 79% | 96% | 0.88 |
-| Keywords only (BM25) | 40% | 53% | 0.47 |
+| **Moments (four rankings, language-aware)** | **85%** | **99%** | **0.91** |
+| Original language only (meaning + keywords) | 81% | 98% | 0.90 |
+| Meaning only (bge-m3) | 78% | 95% | 0.87 |
+| Keywords only (BM25) | 38% | 53% | 0.45 |
 
 | Item | Questions in | n | First | Top 3 |
 |---|---|---|---|---|
@@ -78,7 +81,7 @@ the comparison of rankings.
 | Hindi video | Hindi | 3 | 100% | 100% |
 | Arabic video | English | 10 | 90% | 100% |
 | Arabic video | Arabic | 3 | 100% | 100% |
-| English PDF guide (80 pages) | English | 10 | 60% | 90% |
+| English PDF guide (80 pages) | English | 10 | 40% | 90% |
 | Spanish PDF (4 pages) | English | 6 | 100% | 100% |
 | Spanish PDF (4 pages) | Spanish | 2 | 100% | 100% |
 
@@ -87,12 +90,12 @@ when it is the right item and the right moment or page):
 
 | Fusion | Items | First | Top 3 | MRR |
 |---|---|---|---|---|
-| **Averaged per item (Moments)** | all 85 | **73%** | **92%** | **0.83** |
-| | videos 67 | 72% | 91% | 0.82 |
-| | documents 18 | 78% | 94% | 0.86 |
-| Plain sums | all 85 | 59% | 67% | 0.65 |
+| **Averaged per item (Moments)** | all 85 | **71%** | **92%** | **0.81** |
+| | videos 67 | 72% | 91% | 0.81 |
+| | documents 18 | 67% | 94% | 0.79 |
+| Plain sums | all 85 | 59% | 67% | 0.64 |
 | | videos 67 | 73% | 81% | 0.78 |
-| | documents 18 | 6% | 17% | 0.17 |
+| | documents 18 | 6% | 17% | 0.13 |
 
 What the numbers showed, in the order the changes were made:
 
@@ -113,10 +116,13 @@ What the numbers showed, in the order the changes were made:
 - **Plain fusion was unfair in a mixed library.** Adding up ranks meant a translated video, which sits in
   four rankings, beat a document, which sits in two, even when the document held the answer: only 6% of
   document questions found the right page first when the whole library was searched. Averaging each
-  score over the rankings its item can appear in lifted that to 78% and the whole library from 59% to
-  73%, without changing any ranking within a single item.
+  score over the rankings its item can appear in lifted that to 67% and the whole library from 59% to
+  71%, without changing any ranking within a single item.
 - **The long guide is the hardest item.** Its 80 pages come back to the same licences many times, so the
-  first result is often a neighbouring discussion of the same topic (60% first, 90% in the top 3).
+  first result is often a neighbouring page on the same topic: 40% first, 90% in the top 3. Removing its
+  running headers made the results readable but moved two questions from first to second or third
+  place (it was 60% first before); with ten questions that is within noise, and the answer pages were
+  left as written rather than adjusted after seeing the results.
 
 Small test sets: treat differences of one or two questions as noise.
 

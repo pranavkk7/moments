@@ -148,3 +148,25 @@ def test_mixed_search_averages_over_the_rankings_each_item_can_appear_in(library
         assert hit.score == pytest.approx(sum(1 / (60 + r) for r in hit.ranks.values()) / lists, abs=1e-5)
     top = library.search("Which planet is the largest?", k=1)[0]
     assert top.segment.page == 2  # the document's answer is not outranked by a video in more rankings
+
+
+def test_running_headers_and_footers_are_removed():
+    from moments.documents import remove_running_lines
+
+    topics = ["stars", "planets", "comets", "moons", "galaxies", "nebulae"]
+    pages = [Page(n, f"3. The Creative Commons scheme {n}\nA page about {topic}.\nWhy {topic} matter.\n{n}")
+             for n, topic in zip(range(10, 16), topics)]
+    cleaned = remove_running_lines(pages)
+    assert all("Creative Commons scheme" not in p.text for p in cleaned)
+    assert all(f"A page about {topic}." in p.text for p, topic in zip(cleaned, topics))
+    short = [Page(1, "Title\nbody"), Page(2, "Title\nother")]  # too few pages to tell a header from text
+    assert remove_running_lines(short) == short
+
+
+def test_small_capitals_are_put_back_only_for_words_the_document_also_writes_normally():
+    from moments.documents import fix_small_caps
+
+    vocabulary = {"creative", "commons", "licencing", "scheme"}
+    text = "The CreATive COmmOns liCenCing sCheme, used by OpenCourseWare, with PDFs and YouTube."
+    assert fix_small_caps(text, vocabulary) == \
+        "The Creative Commons licencing scheme, used by OpenCourseWare, with PDFs and YouTube."

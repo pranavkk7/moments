@@ -66,11 +66,13 @@ def main(argv=None, library=None, pool=None, llm=None, out=sys.stdout):
                 print(f"{m['id']}  {m['title']}  [{m['language']}, {size}]", file=out)
         elif args.command == "search":
             titles = {m["id"]: m["title"] for m in library.items()}
-            for hit in library.search(args.question, video_id=args.video, k=args.k):
+            for hit in library.highlight(args.question, library.search(args.question, video_id=args.video, k=args.k)):
                 s = hit.segment
                 where = f"page {s.page}" if s.page else (f"passage {s.index + 1}" if s.start == s.end == 0
                                                          else f"{format_time(s.start)}-{format_time(s.end)}")
                 print(f"{titles.get(hit.video_id, hit.video_id)}  {where}", file=out)
+                if hit.best:
+                    print(f"  Best match: {hit.best}", file=out)
                 print(f"  {s.text[:300]}{'...' if len(s.text) > 300 else ''}", file=out)
                 if s.english:
                     print(f"  English: {s.english[:300]}{'...' if len(s.english) > 300 else ''}", file=out)

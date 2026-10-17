@@ -132,13 +132,25 @@ function drawMarks() {
   })
 }
 
+// Writes `text` into `el` with the best-matching sentence marked, built with text nodes so nothing in
+// a transcript or document is ever treated as HTML.
+function writeMarked(el, text, best) {
+  el.replaceChildren()
+  const at = best ? text.indexOf(best) : -1
+  if (at < 0) {
+    el.textContent = text
+    return
+  }
+  el.append(text.slice(0, at), Object.assign(document.createElement('mark'), { textContent: best }), text.slice(at + best.length))
+}
+
 function jump(citation) {
   showItem(citation.video_id, { start: citation.start, page: citation.page })
   const where = citation.kind === 'document'
     ? (citation.page ? `page ${citation.page}` : `passage ${citation.part}`)
     : `${formatTime(citation.start)}–${formatTime(citation.end)}`
   $('[data-now-time]').textContent = `${citation.title} · ${where}`
-  $('[data-now-text]').textContent = citation.english || citation.text
+  writeMarked($('[data-now-text]'), citation.english || citation.text, citation.best)
   const original = $('[data-now-original]')
   original.textContent = citation.english ? citation.text : ''
   original.hidden = !citation.english
@@ -203,7 +215,7 @@ function showAnswer(body) {
       $('.cite-time', button).textContent = `${c.number}  ${place(c)}`
       $('.cite-title', button).textContent = c.title
       // English first for a video in another language; the original words stay underneath.
-      $('.cite-text', button).textContent = c.english || c.text
+      $('.cite-text', button).textContent = c.best || c.english || c.text
       if (c.english) {
         const original = Object.assign(document.createElement('span'), { className: 'cite-original', textContent: c.text })
         button.append(original)

@@ -12,7 +12,7 @@ Optionally, with an LLM API key, Moments also writes a short answer that cites t
 
 ![An English question about the Japanese version of a film. Moments jumps to 1:47, where the narrator says Jeff Bezos recommended the novel; each moment shows its English translation above the original Japanese, and yellow marks on the timeline show the three moments found.](docs/screenshot.png)
 
-![One question asked of the whole library: the results mix a moment from a video and pages of a PDF guide, and the PDF opens at the page.](docs/screenshot-documents.png)
+![One question asked of the whole library: the results mix moments from a video and a page of a PDF guide, each showing its best-matching sentence, and the PDF opens at page 31, where it names the licence MIT OpenCourseWare uses.](docs/screenshot-documents.png)
 
 ## How it works
 
@@ -49,7 +49,11 @@ question ──► hybrid search (meaning + keywords, language-aware, fair acros
    item's language, and meaning and keywords in English. A keyword match only counts when the question
    is in the same language as the text it matched. Each result's score is averaged over the rankings its
    item can appear in, so videos with a translation don't crowd out documents (measured below).
-7. **Answer (optional).** With an API key, an LLM sees only the numbered moments, replies in a fixed JSON
+7. **Show the best sentence.** Each result shows the sentence that best answers the question, chosen by
+   comparing every sentence of the moment or passage with the question using the same multilingual
+   embeddings (from the English translation for videos in other languages), and the full moment below
+   the player marks it.
+8. **Answer (optional).** With an API key, an LLM sees only the numbered moments, replies in a fixed JSON
    schema, and the code checks that every cited moment is one it was actually given. This part is covered
    by unit tests; the results below measure search, which is what Moments does without a key.
 

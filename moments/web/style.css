@@ -154,6 +154,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .now-time { margin: 0 0 4px; font: 500 13px/1 var(--mono); color: var(--muted); }
 .now-text { margin: 0; max-width: 70ch; }
+/* The sentence that answers the question, marked in the full moment or passage. */
+.now-text mark { background: color-mix(in srgb, var(--cue) 45%, transparent); color: inherit; border-radius: 3px; padding: 0 2px; }
 .now-original { margin: 10px 0 0; max-width: 70ch; font-size: 14px; color: var(--muted); }
 
 /* ---------- ask ---------- */

@@ -30,6 +30,7 @@ from polysub.audio import AudioError
 
 from .documents import DOCUMENT_TYPES, DocumentError, detect_language, passages, read_pages
 from .embed import Embedder
+from .highlight import best_sentences
 from .scripts import script_of
 from .segments import Segment, attach_english, build_segments
 from .transcribe import transcribe, translate
@@ -59,6 +60,7 @@ class Hit:
     keyword_rank: int = None
     language: str = ""
     ranks: dict = None  # 1-based rank in every ranking that found this window
+    best: str = ""  # the sentence that best answers the question (see Library.highlight)
 
 
 def video_id_for(path):
@@ -380,6 +382,14 @@ class Library:
         return [Hit(key[0], windows[key], round(scores[key], 5), rank_in("meaning", key), rank_in("keyword", key),
                     language_of[key[0]], {name: rank_in(name, key) for name in lists if rank_in(name, key)})
                 for key in best]
+
+    def highlight(self, query, hits):
+        """Fills in each hit's best sentence: from the English translation when there is one, since
+        that is what the page shows first, otherwise from the original words."""
+        for hit, best in zip(hits, best_sentences(self.embedder, query,
+                                                  [h.segment.english or h.segment.text for h in hits])):
+            hit.best = best
+        return hits
 
     def _meaning_ranking(self, collection, query, video_id, available, targets, kind):
         vector = self.embedder.query(query)

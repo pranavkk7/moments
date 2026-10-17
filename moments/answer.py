@@ -57,6 +57,7 @@ class Citation:
     english: str = ""
     page: int = None  # documents: the page of the passage
     part: int = None  # documents without pages: the passage's number
+    best: str = ""  # the sentence that best answers the question
 
 
 @dataclass
@@ -96,7 +97,7 @@ def answer(question, hits, titles, llm=None):
             cited.append(number)
     def citation(hit):
         s = hit.segment
-        return Citation(hit.video_id, s.start, s.end, s.text, s.english, s.page, s.index + 1)
+        return Citation(hit.video_id, s.start, s.end, s.text, s.english, s.page, s.index + 1, hit.best)
 
     citations = [citation(hits[n - 1]) for n in cited] if found else []
     return Answer(text or "The video does not seem to cover that.", found=found and bool(citations),

@@ -150,18 +150,19 @@ def create_app(library=None, jobs=None, llm=None, demo=None, answers=None):
     def ask(body: Question):
         try:
             titles = {m["id"]: m["title"] for m in library.items()}
-            hits = library.search(body.question, video_id=body.video_id, k=6)
+            hits = library.highlight(body.question, library.search(body.question, video_id=body.video_id, k=6))
         except LibraryError as error:
             raise HTTPException(400, str(error)) from error
 
         kinds = {m["id"]: m.get("kind", "video") for m in library.items()}
 
-        def cite(video_id, start, end, text, english="", page=None, part=None):
+        def cite(video_id, start, end, text, english="", page=None, part=None, best=""):
             return {"video_id": video_id, "title": titles.get(video_id, video_id), "kind": kinds.get(video_id, "video"),
-                    "start": start, "end": end, "page": page, "part": part, "text": text, "english": english}
+                    "start": start, "end": end, "page": page, "part": part, "text": text, "english": english,
+                    "best": best}
 
         moments = [cite(h.video_id, h.segment.start, h.segment.end, h.segment.text, h.segment.english,
-                        h.segment.page, h.segment.index + 1) for h in hits[:3]]
+                        h.segment.page, h.segment.index + 1, h.best) for h in hits[:3]]
         if not answers:
             return {"answer": "", "found": bool(moments), "written": False, "citations": moments}
 
@@ -174,7 +175,7 @@ def create_app(library=None, jobs=None, llm=None, demo=None, answers=None):
             return {"answer": "A written answer isn't available right now. These are the closest moments:",
                     "found": False, "written": False, "citations": moments}
         return {"answer": result.text, "found": result.found, "written": True,
-                "citations": [cite(c.video_id, c.start, c.end, c.text, c.english, c.page, c.part)
+                "citations": [cite(c.video_id, c.start, c.end, c.text, c.english, c.page, c.part, c.best)
                               for c in result.citations]}
 
     @app.get("/media/{video_id}")
